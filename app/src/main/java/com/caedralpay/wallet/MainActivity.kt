@@ -1,6 +1,7 @@
 package com.caedralpay.wallet
 
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -10,6 +11,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -30,7 +33,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,8 +49,34 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.text.input.KeyboardType
 import java.security.SecureRandom
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.runtime.LaunchedEffect
+import android.hardware.biometrics.BiometricManager
+import android.hardware.biometrics.BiometricPrompt
+import android.os.CancellationSignal
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import javax.crypto.Cipher
 
 class MainActivity : ComponentActivity() {
+    internal var lockWallet: (() -> Unit)? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -63,20 +91,69 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onStop() {
+        super.onStop()
+        lockWallet?.invoke()
+    }
+}
+
+@Composable
+fun Modifier.screenEntrance(): Modifier {
+    var entered by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { entered = true }
+    val progress by animateFloatAsState(if (entered) 1f else 0f, tween(280), label = "screen")
+    return graphicsLayer { alpha = progress; translationY = (1f - progress) * 24f }
 }
 
 @Composable
 fun WelcomeScreen() {
-    var message by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    var destination by remember {
+        mutableStateOf(if (WalletVault.exists(context)) AppDestination.Unlock else AppDestination.Welcome)
+    }
+    var showingImportScreen by remember { mutableStateOf(false) }
     var showingCreateScreen by remember { mutableStateOf(false) }
+    val activity = context as? MainActivity
 
-    BackHandler(enabled = showingCreateScreen) {
+    SideEffect {
+        activity?.lockWallet = {
+            if (destination == AppDestination.Home) destination = AppDestination.Unlock
+        }
+    }
+    DisposableEffect(activity) {
+        onDispose { activity?.lockWallet = null }
+    }
+
+    when (destination) {
+        AppDestination.Unlock -> {
+            UnlockWalletScreen(onUnlocked = { destination = AppDestination.Home })
+            return
+        }
+        AppDestination.Home -> {
+            EmptyWalletHome()
+            return
+        }
+        AppDestination.Welcome -> Unit
+    }
+
+    BackHandler(enabled = showingCreateScreen || showingImportScreen) {
         showingCreateScreen = false
+        showingImportScreen = false
+    }
+
+    if (showingImportScreen) {
+        ImportWalletScreen(
+            onBack = { showingImportScreen = false },
+            onWalletImported = { destination = AppDestination.Home }
+        )
+        return
     }
 
     if (showingCreateScreen) {
         CreateWalletIntroScreen(
-            onBack = { showingCreateScreen = false }
+            onBack = { showingCreateScreen = false },
+            onWalletCreated = { destination = AppDestination.Home }
         )
         return
     }
@@ -84,6 +161,8 @@ fun WelcomeScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .screenEntrance()
+            .imePadding()
             .background(Color(0xFF0B0B0B))
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
@@ -127,7 +206,7 @@ fun WelcomeScreen() {
 
         OutlinedButton(
             onClick = {
-                message = "A importação da carteira será adicionada em outra etapa."
+                showingImportScreen = true
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -139,20 +218,35 @@ fun WelcomeScreen() {
             )
         }
 
-        if (message.isNotEmpty()) {
-            Text(
-                text = message,
-                modifier = Modifier.padding(top = 24.dp),
-                color = Color.LightGray,
-                textAlign = TextAlign.Center
-            )
-        }
     }
 }
 
+private enum class AppDestination { Welcome, Unlock, Home }
+
+// Registra classes e linhas da falha, sem mensagens de exceção ou dados da carteira.
+private fun logVaultFailure(operation: String, error: Throwable) {
+    val stage = (error as? VaultSaveException)?.stage ?: operation
+    val details = generateSequence(error) { it.cause }.take(8).joinToString("\n") { cause ->
+        cause.javaClass.name + "\n" + cause.stackTrace.take(12).joinToString("\n") { "    at $it" }
+    }
+    Log.e("CaedralVault", "Operation=$operation stage=$stage\n$details")
+}
+
 @Composable
-fun CreateWalletIntroScreen(onBack: () -> Unit) {
-    var walletName by rememberSaveable { mutableStateOf("") }
+private fun EmptyWalletHome() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    )
+}
+
+@Composable
+fun CreateWalletIntroScreen(
+    onBack: () -> Unit,
+    onWalletCreated: () -> Unit
+) {
+    var walletName by remember { mutableStateOf("") }
     var showingRecoveryScreen by remember { mutableStateOf(false) }
 
     // As palavras ficam temporariamente em memória nesta versão de teste.
@@ -173,8 +267,10 @@ fun CreateWalletIntroScreen(onBack: () -> Unit) {
 
     if (showingRecoveryScreen) {
         RecoveryWordsPreviewScreen(
+            walletName = walletName.trim(),
             words = recoveryWords,
-            onBack = { returnToNameScreen() }
+            onBack = { returnToNameScreen() },
+            onWalletCreated = onWalletCreated
         )
         return
     }
@@ -182,6 +278,8 @@ fun CreateWalletIntroScreen(onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .screenEntrance()
+            .imePadding()
             .background(Color(0xFF0B0B0B))
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
@@ -254,7 +352,7 @@ fun CreateWalletIntroScreen(onBack: () -> Unit) {
                 .padding(top = 24.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFFDDD6CD),
-                contentColor = Color.White,
+                contentColor = Color(0xFF0B0B0B),
                 disabledContainerColor = Color(0xFF4A4845),
                 disabledContentColor = Color.LightGray
             )
@@ -270,25 +368,15 @@ fun CreateWalletIntroScreen(onBack: () -> Unit) {
                 textAlign = TextAlign.Center
             )
         }
-
-        OutlinedButton(
-            onClick = onBack,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp)
-        ) {
-            Text(
-                text = "Voltar",
-                color = Color.White
-            )
-        }
     }
 }
 
 @Composable
 fun RecoveryWordsPreviewScreen(
+    walletName: String,
     words: List<String>,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onWalletCreated: () -> Unit
 ) {
 
     var showingConfirmation by remember { mutableStateOf(false) }
@@ -299,8 +387,10 @@ fun RecoveryWordsPreviewScreen(
 
     if (showingConfirmation) {
         ConfirmRecoveryWordsScreen(
+            walletName = walletName,
             words = words,
-            onBack = { showingConfirmation = false }
+            onBack = { showingConfirmation = false },
+            onWalletCreated = onWalletCreated
         )
         return
     }
@@ -308,6 +398,8 @@ fun RecoveryWordsPreviewScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .screenEntrance()
+            .imePadding()
             .background(Color(0xFF0B0B0B))
             .verticalScroll(rememberScrollState())
             .padding(
@@ -411,22 +503,10 @@ fun RecoveryWordsPreviewScreen(
                 .padding(top = 24.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFFDDD6CD),
-                contentColor = Color.White
+                contentColor = Color(0xFF0B0B0B)
             )
         ) {
             Text(text = "Prosseguir")
-        }
-
-        OutlinedButton(
-            onClick = onBack,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp)
-        ) {
-            Text(
-                text = "Voltar",
-                color = Color.White
-            )
         }
     }
 }
@@ -446,8 +526,10 @@ fun generateRecoveryWords(): List<String> {
 
 @Composable
 fun ConfirmRecoveryWordsScreen(
+    walletName: String,
     words: List<String>,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onWalletCreated: () -> Unit
 ) {
     val selectedPositions = remember {
         val random = SecureRandom()
@@ -460,8 +542,19 @@ fun ConfirmRecoveryWordsScreen(
     val answers = remember {
         mutableStateListOf("", "", "", "")
     }
+    val focusRequesters = remember { List(4) { FocusRequester() } }
 
-    var confirmed by remember { mutableStateOf(false) }
+    var showingPinScreen by remember { mutableStateOf(false) }
+
+    if (showingPinScreen) {
+        CreatePinScreen(
+            walletName = walletName,
+            words = words,
+            onBack = { showingPinScreen = false },
+            onWalletCreated = onWalletCreated
+        )
+        return
+    }
 
     val allCorrect = selectedPositions.indices.all { row ->
         answers[row]
@@ -476,6 +569,8 @@ fun ConfirmRecoveryWordsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .screenEntrance()
+            .imePadding()
             .background(Color(0xFF0B0B0B))
             .verticalScroll(rememberScrollState())
             .padding(
@@ -561,26 +656,34 @@ fun ConfirmRecoveryWordsScreen(
                                     onValueChange = { input ->
                                         if (input.length <= 20) {
                                             answers[row] = input
-                                            confirmed = false
                                         }
                                     },
                                     modifier = Modifier
                                         .weight(1f)
-                                        .padding(start = 4.dp),
+                                        .padding(start = 4.dp)
+                                        .focusRequester(focusRequesters[row]),
                                     singleLine = true,
+                                    cursorBrush = SolidColor(Color(0xFFDDD6CD)),
+                                    keyboardActions = KeyboardActions(
+                                        onNext = { if (row < 3) focusRequesters[row + 1].requestFocus() }
+                                    ),
                                     textStyle = androidx.compose.ui.text.TextStyle(
                                         color = Color.White,
                                         fontSize = 12.sp
                                     ),
                                     keyboardOptions = KeyboardOptions(
                                         keyboardType = KeyboardType.Password,
+                                        imeAction = if (row < 3) ImeAction.Next else ImeAction.Done,
                                         autoCorrectEnabled = false
                                     )
                                 )
                             } else {
                                 Text(
                                     text = words[position],
-                                    modifier = Modifier.padding(start = 4.dp),
+                                    modifier = Modifier
+                                        .padding(start = 4.dp)
+                                        .blur(6.dp)
+                                        .clearAndSetSemantics { contentDescription = "Palavra oculta" },
                                     color = Color.White,
                                     fontSize = 12.sp,
                                     maxLines = 1
@@ -594,7 +697,7 @@ fun ConfirmRecoveryWordsScreen(
 
         Button(
             onClick = {
-                confirmed = true
+                showingPinScreen = true
             },
             enabled = allCorrect,
             modifier = Modifier
@@ -602,32 +705,489 @@ fun ConfirmRecoveryWordsScreen(
                 .padding(top = 24.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFFDDD6CD),
-                contentColor = Color.White,
+                contentColor = Color(0xFF0B0B0B),
                 disabledContainerColor = Color(0xFF4A4845),
                 disabledContentColor = Color.LightGray
             )
         ) {
             Text(text = "Prosseguir")
         }
+    }
+}
 
-        if (confirmed) {
+@Composable
+fun CreatePinScreen(
+    walletName: String,
+    words: List<String>,
+    onBack: () -> Unit,
+    onWalletCreated: () -> Unit
+) {
+    var pin by remember { mutableStateOf("") }
+    var confirmation by remember { mutableStateOf("") }
+    var showingBiometric by remember { mutableStateOf(false) }
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) { visible = true }
+    BackHandler { if (showingBiometric) showingBiometric = false else onBack() }
+
+    if (showingBiometric) {
+        BiometricSetupScreen(
+            walletName = walletName,
+            words = words,
+            pin = pin,
+            onBack = { showingBiometric = false },
+            onWalletCreated = {
+                pin = ""
+                confirmation = ""
+                onWalletCreated()
+            }
+        )
+        return
+    }
+
+    val complete = pin.length == 6 && confirmation.length == 6
+    val mismatch = complete && pin != confirmation
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = Color(0xFFDDD6CD),
+        unfocusedBorderColor = Color(0xFF77736E),
+        focusedLabelColor = Color(0xFFDDD6CD),
+        unfocusedLabelColor = Color.LightGray,
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        cursorColor = Color(0xFFDDD6CD)
+    )
+    val keyboard = KeyboardOptions(
+        keyboardType = KeyboardType.NumberPassword,
+        autoCorrectEnabled = false
+    )
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + slideInVertically { it / 20 }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF0B0B0B))
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 40.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.caedralpay),
+                contentDescription = "Logo da CaedralPay",
+                modifier = Modifier.size(140.dp).padding(bottom = 16.dp)
+            )
             Text(
-                text = "Palavras confirmadas. O PIN será criado na próxima etapa.",
+                text = "Crie seu PIN",
+                color = Color.White,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "Escolha um PIN de 6 dígitos para este dispositivo.",
+                modifier = Modifier.padding(top = 16.dp, bottom = 24.dp),
+                color = Color.LightGray,
+                textAlign = TextAlign.Center
+            )
+            OutlinedTextField(
+                value = pin,
+                onValueChange = { input ->
+                    if (input.length <= 6 && input.all { it in '0'..'9' }) {
+                        pin = input
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("PIN de 6 dígitos") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = keyboard,
+                colors = fieldColors
+            )
+            OutlinedTextField(
+                value = confirmation,
+                onValueChange = { input ->
+                    if (input.length <= 6 && input.all { it in '0'..'9' }) {
+                        confirmation = input
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                label = { Text("Confirme seu PIN") },
+                singleLine = true,
+                isError = mismatch,
+                supportingText = if (mismatch) {
+                    { Text("Os PINs não coincidem.") }
+                } else null,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = keyboard,
+                colors = fieldColors
+            )
+            Button(
+                onClick = {
+                    showingBiometric = true
+                },
+                enabled = complete && !mismatch,
+                modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFDDD6CD),
+                    contentColor = Color(0xFF0B0B0B),
+                    disabledContainerColor = Color(0xFF4A4845),
+                    disabledContentColor = Color.LightGray
+                )
+            ) { Text("Prosseguir") }
+        }
+    }
+}
+
+@Composable
+fun BiometricSetupScreen(
+    walletName: String,
+    words: List<String>,
+    pin: String,
+    onBack: () -> Unit,
+    onWalletCreated: () -> Unit
+) {
+    val context = LocalContext.current
+    var signal by remember { mutableStateOf<CancellationSignal?>(null) }
+    var status by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+    var savingWithoutBiometric by remember { mutableStateOf(false) }
+    val manager = remember { context.getSystemService(BiometricManager::class.java) }
+    val available = manager?.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
+        BiometricManager.BIOMETRIC_SUCCESS
+
+    fun saveWallet(biometricCipher: Cipher?) {
+        if (saving) return
+        saving = true
+        savingWithoutBiometric = biometricCipher == null
+        status = ""
+        val appContext = context.applicationContext
+        Thread {
+            val result = runCatching {
+                WalletVault.create(
+                    context = appContext,
+                    walletName = walletName,
+                    words = words,
+                    pin = pin.toCharArray(),
+                    authenticatedBiometricCipher = biometricCipher
+                )
+            }
+            context.mainExecutor.execute {
+                result.onSuccess { onWalletCreated() }
+                    .onFailure { error ->
+                        logVaultFailure("save-wallet", error)
+                        saving = false
+                        status = if (WalletVault.exists(appContext)) {
+                            "Já existe uma carteira protegida neste dispositivo."
+                        } else {
+                            "Não foi possível proteger a carteira. Tente novamente."
+                        }
+                    }
+            }
+        }.start()
+    }
+
+    DisposableEffect(Unit) { onDispose { signal?.cancel() } }
+    BackHandler(enabled = !saving) { signal?.cancel(); onBack() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .screenEntrance()
+            .imePadding()
+            .background(Color(0xFF0B0B0B))
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 40.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.caedralpay),
+            contentDescription = "Logo da CaedralPay",
+            modifier = Modifier.size(140.dp).padding(bottom = 16.dp)
+        )
+        Text(
+            "Acesso com biometria",
+            color = Color.White,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            "Use a biometria do aparelho para abrir sua carteira com segurança. O PIN continuará disponível.",
+            modifier = Modifier.padding(top = 16.dp, bottom = 24.dp),
+            color = Color.LightGray,
+            textAlign = TextAlign.Center
+        )
+
+        Button(
+            onClick = {
+                signal?.cancel()
+                val current = CancellationSignal()
+                signal = current
+                status = ""
+                try {
+                    val cipher = BiometricCrypto.cipherForEncryption()
+                    val prompt = BiometricPrompt.Builder(context)
+                        .setTitle("Habilitar biometria")
+                        .setSubtitle("Confirme sua identidade para proteger a carteira")
+                        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                        .setNegativeButton("Cancelar", context.mainExecutor) { _, _ -> current.cancel() }
+                        .build()
+                    prompt.authenticate(
+                        BiometricPrompt.CryptoObject(cipher),
+                        current,
+                        context.mainExecutor,
+                        object : BiometricPrompt.AuthenticationCallback() {
+                            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                                val authorizedCipher = result.cryptoObject?.cipher
+                                if (authorizedCipher == null) {
+                                    status = "Não foi possível habilitar a biometria."
+                                } else {
+                                    saveWallet(authorizedCipher)
+                                }
+                            }
+
+                            override fun onAuthenticationFailed() {
+                                status = "Biometria não reconhecida. Tente novamente."
+                            }
+
+                            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                if (!current.isCanceled) {
+                                    status = "Autenticação interrompida. Tente novamente."
+                                }
+                            }
+                        }
+                    )
+                } catch (error: Exception) {
+                    logVaultFailure("prepare-biometric", error)
+                    status = "Não foi possível preparar a biometria neste aparelho."
+                }
+            },
+            enabled = available && !saving,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFDDD6CD),
+                contentColor = Color(0xFF0B0B0B),
+                disabledContainerColor = Color(0xFF4A4845),
+                disabledContentColor = Color.LightGray
+            )
+        ) {
+            if (saving && !savingWithoutBiometric) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = Color(0xFFDDD6CD)
+                )
+            } else {
+                Text("Habilitar Biometria")
+            }
+        }
+
+        if (!available) {
+            Text(
+                "Biometria forte não está disponível ou não está cadastrada no aparelho.",
                 modifier = Modifier.padding(top = 16.dp),
-                color = Color(0xFFDDD6CD),
+                color = Color.LightGray,
                 textAlign = TextAlign.Center
             )
         }
 
         OutlinedButton(
-            onClick = onBack,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp)
+            onClick = { saveWallet(null) },
+            enabled = !saving,
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
         ) {
+            if (saving && savingWithoutBiometric) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = Color(0xFFDDD6CD)
+                )
+            } else {
+                Text("Agora não", color = if (saving) Color.Gray else Color.White)
+            }
+        }
+
+        if (status.isNotEmpty()) {
             Text(
-                text = "Voltar",
-                color = Color.White
+                status,
+                modifier = Modifier.padding(top = 16.dp),
+                color = Color(0xFFDDD6CD),
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun UnlockWalletScreen(onUnlocked: () -> Unit) {
+    val context = LocalContext.current
+    var pin by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf("") }
+    var working by remember { mutableStateOf(false) }
+    var signal by remember { mutableStateOf<CancellationSignal?>(null) }
+    val hasBiometric = remember { runCatching { WalletVault.hasBiometric(context) }.getOrDefault(false) }
+
+    fun unlockWithPin() {
+        if (working || pin.length != 6) return
+        working = true
+        status = ""
+        val enteredPin = pin.toCharArray()
+        pin = ""
+        val appContext = context.applicationContext
+        Thread {
+            val result = runCatching { WalletVault.unlockWithPin(appContext, enteredPin) }
+            context.mainExecutor.execute {
+                result.onSuccess { onUnlocked() }
+                    .onFailure { error ->
+                        working = false
+                        status = when (error) {
+                            is WrongPinException -> "PIN incorreto."
+                            is PinTemporarilyLockedException ->
+                                "Aguarde ${error.remainingSeconds} segundos antes de tentar novamente."
+                            else -> "Não foi possível abrir a carteira."
+                        }
+                    }
+            }
+        }.start()
+    }
+
+    fun unlockWithBiometric() {
+        if (working) return
+        signal?.cancel()
+        val current = CancellationSignal()
+        signal = current
+        status = ""
+        try {
+            val cipher = WalletVault.biometricCipherForUnlock(context)
+            val prompt = BiometricPrompt.Builder(context)
+                .setTitle("Abrir CaedralPay Wallet")
+                .setSubtitle("Confirme sua biometria")
+                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                .setNegativeButton("Usar PIN", context.mainExecutor) { _, _ -> current.cancel() }
+                .build()
+            prompt.authenticate(
+                BiometricPrompt.CryptoObject(cipher),
+                current,
+                context.mainExecutor,
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                        try {
+                            val authorizedCipher = requireNotNull(result.cryptoObject?.cipher)
+                            WalletVault.unlockWithBiometric(context, authorizedCipher)
+                            onUnlocked()
+                        } catch (_: Exception) {
+                            status = "Não foi possível abrir com biometria. Use o PIN."
+                        }
+                    }
+
+                    override fun onAuthenticationFailed() {
+                        status = "Biometria não reconhecida."
+                    }
+
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        if (!current.isCanceled) status = "Use o PIN para abrir a carteira."
+                    }
+                }
+            )
+        } catch (_: Exception) {
+            status = "Biometria indisponível. Use o PIN."
+        }
+    }
+
+    LaunchedEffect(hasBiometric) {
+        if (hasBiometric) unlockWithBiometric()
+    }
+
+    DisposableEffect(Unit) { onDispose { signal?.cancel() } }
+    BackHandler { }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0B0B0B))
+            .imePadding()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.caedralpay),
+            contentDescription = "Logo da CaedralPay",
+            modifier = Modifier.size(140.dp).padding(bottom = 16.dp)
+        )
+        Text(
+            "Abra sua carteira",
+            color = Color.White,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        OutlinedTextField(
+            value = pin,
+            onValueChange = { input ->
+                if (input.length <= 6 && input.all(Char::isDigit)) pin = input
+            },
+            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+            label = { Text("PIN de 6 dígitos") },
+            singleLine = true,
+            enabled = !working,
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.NumberPassword,
+                imeAction = ImeAction.Done,
+                autoCorrectEnabled = false
+            ),
+            keyboardActions = KeyboardActions(onDone = { unlockWithPin() }),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFFDDD6CD),
+                unfocusedBorderColor = Color(0xFF77736E),
+                focusedLabelColor = Color(0xFFDDD6CD),
+                unfocusedLabelColor = Color.LightGray,
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                cursorColor = Color(0xFFDDD6CD)
+            )
+        )
+        Button(
+            onClick = { unlockWithPin() },
+            enabled = pin.length == 6 && !working,
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFDDD6CD),
+                contentColor = Color(0xFF0B0B0B),
+                disabledContainerColor = Color(0xFF4A4845),
+                disabledContentColor = Color.LightGray
+            )
+        ) {
+            if (working) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = Color(0xFF0B0B0B)
+                )
+            } else {
+                Text("Entrar")
+            }
+        }
+        if (hasBiometric) {
+            OutlinedButton(
+                onClick = { unlockWithBiometric() },
+                enabled = !working,
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+            ) {
+                Text("Usar biometria", color = Color.White)
+            }
+        }
+        if (status.isNotEmpty()) {
+            Text(
+                status,
+                modifier = Modifier.padding(top = 16.dp),
+                color = Color(0xFFDDD6CD),
+                textAlign = TextAlign.Center
             )
         }
     }
