@@ -25,7 +25,7 @@ jobs:
           (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37.0' 'build-tools;36.0.0'
           test -f "$ANDROID_HOME/platforms/android-37.0/android.jar"
       - name: Build, unit tests and lint
-        run: ./gradlew --no-configuration-cache :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+        run: ./gradlew --no-configuration-cache :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug
   distribution:
     runs-on: ubuntu-latest
     timeout-minutes: 10

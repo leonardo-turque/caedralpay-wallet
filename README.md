@@ -200,7 +200,7 @@ O repositório Wallet Core usa as propriedades `caedralGithubUser` e `caedralGit
 ./gradlew --no-configuration-cache :app:lintDebug
 ```
 
-Os testes instrumentados podem executar em um pacote separado por `./gradlew --no-configuration-cache -PcaedralIsolatedUiTest=true :app:connectedDebugAndroidTest`. Essa propriedade usa o applicationId `com.caedralpay.wallet.validation`, com dados e chaves separados da wallet normal. O aparelho precisa estar desbloqueado; os testes mantêm a própria Activity de UI acesa, sem alterar as configurações globais de bloqueio. Sem essa propriedade, o comando usa o pacote normal e pode substituir a instalação existente.
+Os testes instrumentados podem executar em um pacote separado por `./gradlew --no-configuration-cache -PcaedralIsolatedUiTest=true :app:connectedDebugAndroidTest`. Para regressão geral, excluir explicitamente `EvmEndToEndTest`, `PublicNetworkValidationTest` e `ReleaseUpgradeTest`, que exigem seus runners próprios. Os testes públicos são opt-in e não devem ser acionados pela regressão automática. Essa propriedade usa o applicationId `com.caedralpay.wallet.validation`, com dados e chaves separados da wallet normal. O aparelho precisa estar desbloqueado; os testes mantêm a própria Activity de UI acesa, sem alterar as configurações globais de bloqueio. Sem essa propriedade, o comando usa o pacote normal e pode substituir a instalação existente.
 
 O APK de desenvolvimento é gerado em `app/build/outputs/apk/debug/app-debug.apk`. O modo `--offline` funciona apenas com todas as dependências já presentes no cache. O lint pode exigir um download inicial independente das dependências do build.
 

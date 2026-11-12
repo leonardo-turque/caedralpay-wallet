@@ -22,7 +22,8 @@ internal data class WalletTransaction(val quote: PreparedTransfer, val hash: Str
 }
 
 /** Durable encrypted outbox: persist BEFORE broadcasting. Never overwrite an unreadable journal. */
-internal class TransactionJournal(context: Context) {
+internal class TransactionJournal(context: Context, private val capacity: Int = 500) {
+    init { require(capacity in 1..500) }
     private val file = AtomicFile(context.filesDir.resolve("wallet_activity.bin"))
     private val aad = "CaedralPay/activity/v1".toByteArray()
     companion object { private val monitor = Any() }
@@ -53,7 +54,12 @@ internal class TransactionJournal(context: Context) {
             require(records.none { !it.terminal && it.quote.chain == record.quote.chain && it.quote.from.equals(record.quote.from, true) }) {
                 "Aguarde a transação anterior desta conta ou retome sua transmissão."
             }
-            require(records.size < 500) { "Limite do histórico local atingido." }
+            // Retain pending envelopes; prune finalized history instead of disabling new sends.
+            while (records.size >= capacity) {
+                val oldestFinalized = records.indexOfFirst { it.terminal }
+                require(oldestFinalized >= 0) { "Aguarde a conclusão dos envios em acompanhamento." }
+                records.removeAt(oldestFinalized)
+            }
             records.add(record)
         }
         val clear = JSONArray(records.map(::encode)).toString().toByteArray()

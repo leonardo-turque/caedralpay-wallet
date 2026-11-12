@@ -1,0 +1,43 @@
+{
+  "balances": [
+    {
+      "chainId": 56,
+      "address": "0x1985DF544b50aFe586CB777eDdcBd239eF13f02B",
+      "native": "0.000000000000000000",
+      "usdt": "0.000000000000000000",
+      "block": "133158329",
+      "endpoint": "https://bsc-dataseed.bnbchain.org"
+    },
+    {
+      "chainId": 97,
+      "address": "0x1985DF544b50aFe586CB777eDdcBd239eF13f02B",
+      "native": "0.000000000000000000",
+      "usdt": "0.000000000000000000",
+      "block": "142298688",
+      "endpoint": "https://bsc-testnet-dataseed.bnbchain.org"
+    }
+  ],
+  "capacity": [
+    {
+      "chainId": 56,
+      "operations": 15,
+      "concurrency": 5,
+      "failures": 0,
+      "p50Ms": 993,
+      "maxMs": 1345
+    },
+    {
+      "chainId": 97,
+      "operations": 15,
+      "concurrency": 5,
+      "failures": 0,
+      "p50Ms": 770,
+      "maxMs": 1391
+    }
+  ],
+  "recovery": {
+    "sameAddresses": true,
+    "vaultReopened": true,
+    "applicationVersionCode": 2
+  }
+}

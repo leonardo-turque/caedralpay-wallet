@@ -1,0 +1,27 @@
+{
+  "steps": [
+    {
+      "step": "seed",
+      "passed": true,
+      "versionCode": 1002,
+      "package": "com.caedralpay.wallet.upgradevalidation"
+    },
+    {
+      "step": "upgradeAndRecovery",
+      "passed": true,
+      "versionCode": 1003,
+      "package": "com.caedralpay.wallet.upgradevalidation"
+    }
+  ],
+  "sameSigningKey": true,
+  "preserved": [
+    "vault",
+    "keystore-access",
+    "account-names",
+    "derived-addresses",
+    "preferences",
+    "encrypted-history"
+  ],
+  "recovery": "Nova cifragem e PIN diferente recuperaram os mesmos endereços de duas contas a partir da frase pública de fixture.",
+  "deviceScope": "A57 Android 17; não representa cobertura de todos os aparelhos ou biometria física."
+}
