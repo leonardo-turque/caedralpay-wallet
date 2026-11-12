@@ -6,6 +6,7 @@ window.onDownloadChallenge=token=>{challenge=token;button.disabled=false;};
 window.onDownloadExpired=()=>{challenge='';button.disabled=true;};
 fetch('/config.json').then(r=>r.json()).then(config=>{
   downloadAvailable=config.available===true;
+  if(downloadAvailable)message.textContent=`Versão ${config.version} disponível. Conclua a verificação para baixar.`;
   if(!downloadAvailable){message.textContent='Beta em validação. Você pode verificar a proteção de acesso abaixo.';button.textContent='Validar proteção';}
   if(!config.sitekey){message.textContent='Configuração de acesso em preparação.';return;}
   const widget=document.createElement('div');widget.className='cf-turnstile';widget.dataset.sitekey=config.sitekey;

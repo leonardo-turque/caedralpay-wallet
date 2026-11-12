@@ -83,3 +83,8 @@ O procedimento executável, fontes oficiais de tokens e limites dos testes ficam
 | BSC testnet | tBNB | [recibo](https://testnet.bscscan.com/tx/0xaa7d2c95f04112903756bcddd863cda71c820bcd94adc5d7209d5188f4481628) | [recibo](https://testnet.bscscan.com/tx/0x4d7b795da8ff3b4a77d0643e6d84262e8567e7f7b4ce2f07dc106a99e8a7df4c) |
 
 Não há recibo de USDT na testnet: o faucet não forneceu esse saldo. Essa lacuna é mantida no manifesto como `publicTestnetTokenRoundTrip=pending`. A transferência ERC-20 foi exercitada nas duas chains locais e com USDT real na BSC mainnet. O APK beta não é anunciado como auditado.
+
+
+## Publicação do beta
+
+Beta `0.1.0-beta.1` publicado em https://download.caedral.com após merge do PR #7 e tag anotada. O release público no GitHub contém notas, manifesto e SHA-256, sem APK que contorne o Turnstile. `qa/results/beta-deployment.json` registra HTTPS/Cloudflare 200, origem direta e header forjado 403, download sem assinatura 403, desafio inválido 403 e caminho direto do APK 404. O responsável confirmou o download real do APK após o desafio. O checksum do binário publicado coincide com a evidência de assinatura verificada.

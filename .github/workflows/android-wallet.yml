@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Download protection tests
-        run: node --test distribution/server.test.mjs
+        run: node --test distribution/*.test.mjs
       - name: Python and shell syntax
         run: |
           python3 -m py_compile scripts/*.py distribution/*.py
