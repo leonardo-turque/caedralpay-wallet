@@ -7,4 +7,10 @@
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/caedralpay</item>
     </style>
 
+    <style name="Theme.Wallet.Light" parent="Theme.Wallet">
+        <item name="android:windowBackground">#FAF9F6</item>
+        <item name="android:windowSplashScreenBackground">#FAF9F6</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
 </resources>

@@ -1,0 +1,16 @@
+[Unit]
+Description=CaedralPay beta download with Turnstile validation
+After=network-online.target
+[Service]
+User=caedral-download
+WorkingDirectory=/opt/caedral-wallet/distribution
+EnvironmentFile=/etc/caedral-wallet/download.env
+ExecStart=/usr/bin/node /opt/caedral-wallet/distribution/server.mjs
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+[Install]
+WantedBy=multi-user.target

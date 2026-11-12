@@ -15,6 +15,17 @@ class RecoveryPhraseTest {
     private val publicVector = List(11) { "abandon" } + "about"
 
     @Test
+    fun derivedAccountsAreDistinctAndRecoverableInOrder() {
+        System.loadLibrary("TrustWalletCore")
+        val phrase = publicVector.joinToString(" ")
+        val first = deriveEvmAddress(phrase, 0)
+        val second = deriveEvmAddress(phrase, 1)
+        assertEquals(HDWallet(phrase, "").getAddressForCoin(CoinType.ETHEREUM), first)
+        assertTrue(first != second)
+        assertEquals(second, deriveEvmAddress(phrase, 1))
+    }
+
+    @Test
     fun validatesChecksumAndRejectsIncorrectWordsOrLength() {
         assertTrue(isValidRecoveryPhrase(publicVector))
         assertFalse(isValidRecoveryPhrase(List(12) { "abandon" }))

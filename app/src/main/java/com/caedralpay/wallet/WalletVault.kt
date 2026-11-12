@@ -10,6 +10,7 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.security.KeyStore
 import java.security.SecureRandom
+import java.util.UUID
 import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -19,7 +20,9 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
-class WalletData(val name: String, val mnemonic: String) {
+class WalletData internal constructor(internal val catalog: WalletCatalog) {
+    val name: String get() = catalog.selected.name
+    val mnemonic: String get() = catalog.selected.mnemonic
     override fun toString(): String = "WalletData([REDACTED])"
 }
 
@@ -27,6 +30,11 @@ class WrongPinException : Exception()
 class PinTemporarilyLockedException(val remainingSeconds: Long) : Exception()
 class VaultUnavailableException(cause: Throwable? = null) : Exception(cause)
 class VaultSaveException(val stage: String, cause: Throwable) : Exception(cause)
+class WalletAccountException(message: String) : Exception(message)
+enum class VaultAction { RemoveAccount, RevealPhrase, ChangePin, SignTransfer }
+class VaultAuthorization internal constructor() {
+    override fun toString() = "VaultAuthorization([REDACTED])"
+}
 
 object WalletVault {
     private const val FILE_NAME = "wallet_vault.bin"
@@ -34,7 +42,6 @@ object WalletVault {
     private const val DEVICE_KEY_ALIAS = "caedral_device_vault_v1"
     private const val FILE_MAGIC = 0x43445631 // CDV1
     private const val RECORD_VERSION = 1
-    private const val PAYLOAD_MAGIC = 0x43575031 // CWP1
     private const val KDF_ITERATIONS = 600_000
     private const val MAX_FIELD_SIZE = 1_048_576
     private const val ATTEMPT_PREFS = "wallet_pin_attempts"
@@ -42,11 +49,28 @@ object WalletVault {
     private val outerAad = "CaedralPay/device-vault/v1".toByteArray(Charsets.UTF_8)
     private val payloadAad = "CaedralPay/wallet-payload/v1".toByteArray(Charsets.UTF_8)
     private val pinAad = "CaedralPay/pin-wrapped-key/v1".toByteArray(Charsets.UTF_8)
+    private var session: VaultSession? = null
+    private class Grant(val token: VaultAuthorization, val session: VaultSession, val action: VaultAction,
+        val walletId: String, val accountIndex: Int?, val expiresAt: Long, val binding: String?)
+    private var grant: Grant? = null
+
+    private class VaultSession(val key: ByteArray, val snapshot: WalletAccountsSnapshot)
+
+    @Synchronized
+    fun lock() {
+        grant = null
+        session?.key?.fill(0)
+        session = null
+    }
+
+    @Synchronized
+    fun accountsSnapshot(): WalletAccountsSnapshot = checkNotNull(session) { "Carteira bloqueada." }.snapshot
 
     fun exists(context: Context): Boolean = vaultFile(context).baseFile.isFile
 
     fun hasBiometric(context: Context): Boolean = readRecord(context).biometricWrappedKey != null
 
+    @Synchronized
     fun create(
         context: Context,
         walletName: String,
@@ -65,7 +89,9 @@ object WalletVault {
         var stage = "payload-encryption"
         try {
             val dataKey = SecretKeySpec(dataKeyBytes, "AES")
-            val payload = encodePayload(walletName.trim(), words.joinToString(" "))
+            val catalog = WalletCatalog.first(walletName.trim(), words.joinToString(" "))
+            val snapshot = catalog.snapshot()
+            val payload = WalletCatalogCodec.encode(catalog)
             val payloadEncrypted = try {
                 encrypt(dataKey, payload, payloadAad)
             } finally {
@@ -96,6 +122,8 @@ object WalletVault {
                     biometricWrappedKey = biometricWrapped
                 )
             )
+            lock()
+            session = VaultSession(dataKeyBytes.clone(), snapshot)
         } catch (error: Exception) {
             throw VaultSaveException(stage, error)
         } finally {
@@ -105,6 +133,7 @@ object WalletVault {
         }
     }
 
+    @Synchronized
     fun unlockWithPin(context: Context, pin: CharArray): WalletData {
         require(pin.size == 6 && pin.all { it in '0'..'9' })
         val remaining = remainingLockMillis(context)
@@ -123,7 +152,12 @@ object WalletVault {
                 recordFailedAttempt(context)
                 throw WrongPinException()
             }
-            return decryptPayload(record, dataKeyBytes).also { clearFailedAttempts(context) }
+            return decryptPayload(record, dataKeyBytes).also {
+                val snapshot = it.catalog.snapshot()
+                lock()
+                session = VaultSession(dataKeyBytes.clone(), snapshot)
+                clearFailedAttempts(context)
+            }
         } finally {
             pin.fill('\u0000')
             pinKeyBytes?.fill(0)
@@ -138,13 +172,18 @@ object WalletVault {
         return BiometricCrypto.cipherForDecryption(iv)
     }
 
+    @Synchronized
     fun unlockWithBiometric(context: Context, authenticatedCipher: Cipher): WalletData {
         val record = readRecord(context)
         val wrappedKey = record.biometricWrappedKey ?: throw VaultUnavailableException()
         var dataKeyBytes: ByteArray? = null
         try {
             dataKeyBytes = BiometricCrypto.finishAuthenticatedOperation(authenticatedCipher, wrappedKey)
-            return decryptPayload(record, dataKeyBytes)
+            return decryptPayload(record, dataKeyBytes).also {
+                val snapshot = it.catalog.snapshot()
+                lock()
+                session = VaultSession(dataKeyBytes.clone(), snapshot)
+            }
         } finally {
             dataKeyBytes?.fill(0)
         }
@@ -158,7 +197,201 @@ object WalletVault {
             payloadAad
         )
         return try {
-            decodePayload(clear)
+            WalletData(WalletCatalogCodec.decode(clear))
+        } finally {
+            clear.fill(0)
+        }
+    }
+
+    @Synchronized
+    fun selectAccount(context: Context, walletId: String, index: Int): WalletAccountsSnapshot =
+        updateCatalog(context) { catalog ->
+            val wallet = catalog.wallets.first { it.id == walletId }
+            require(index in wallet.accountNames.indices)
+            require(index !in wallet.hiddenIndices)
+            WalletCatalog(catalog.wallets, walletId, index)
+        }
+
+    @Synchronized
+    fun addAccount(context: Context, walletId: String, name: String): WalletAccountsSnapshot =
+        updateCatalog(context) { catalog ->
+            val wallet = catalog.wallets.first { it.id == walletId }
+            if (wallet.accountNames.size >= WalletCatalogCodec.MAX_ACCOUNTS) {
+                throw WalletAccountException("Limite de contas desta carteira atingido.")
+            }
+            require(name.isNotBlank() && name.length <= 30)
+            val updated = StoredWallet(wallet.id, wallet.name, wallet.mnemonic, wallet.accountNames + name.trim(), wallet.hiddenIndices)
+            WalletCatalog(catalog.wallets.map { if (it.id == walletId) updated else it }, walletId, updated.accountNames.lastIndex)
+        }
+
+    @Synchronized
+    fun importWallet(
+        context: Context, name: String, words: List<String>, accountCount: Int
+    ): WalletAccountsSnapshot {
+        val normalized = words.map(::normalizeRecoveryWord)
+        if (!isValidRecoveryPhrase(normalized)) throw WalletAccountException("Frase de recuperação inválida.")
+        require(name.isNotBlank() && name.length <= 30)
+        require(accountCount in 1..WalletCatalogCodec.MAX_ACCOUNTS)
+        val mnemonic = normalized.joinToString(" ")
+        return updateCatalog(context) { catalog ->
+            if (catalog.wallets.any { it.mnemonic == mnemonic }) {
+                throw WalletAccountException("Esta carteira já está adicionada. Selecione-a na lista.")
+            }
+            if (catalog.wallets.size >= WalletCatalogCodec.MAX_WALLETS) {
+                throw WalletAccountException("Limite de carteiras deste dispositivo atingido.")
+            }
+            val wallet = StoredWallet(UUID.randomUUID().toString(), name.trim(), mnemonic,
+                List(accountCount) { "Conta ${it + 1}" })
+            WalletCatalog(catalog.wallets + wallet, wallet.id, 0)
+        }
+    }
+
+    @Synchronized
+    fun renameWallet(context: Context, walletId: String, name: String): WalletAccountsSnapshot = updateCatalog(context) { catalog ->
+        require(name.isNotBlank() && name.length <= 30)
+        require(catalog.wallets.any { it.id == walletId })
+        WalletCatalog(catalog.wallets.map {
+            if (it.id == walletId) StoredWallet(it.id, name.trim(), it.mnemonic, it.accountNames, it.hiddenIndices) else it
+        }, catalog.selectedWalletId, catalog.selectedAccountIndex)
+    }
+
+    @Synchronized
+    fun renameAccount(context: Context, walletId: String, index: Int, name: String): WalletAccountsSnapshot = updateCatalog(context) { catalog ->
+        require(name.isNotBlank() && name.length <= 30)
+        val wallet = catalog.wallets.first { it.id == walletId }
+        require(index in wallet.accountNames.indices && index !in wallet.hiddenIndices)
+        val updated = StoredWallet(wallet.id, wallet.name, wallet.mnemonic,
+            wallet.accountNames.mapIndexed { i, old -> if (i == index) name.trim() else old }, wallet.hiddenIndices)
+        WalletCatalog(catalog.wallets.map { if (it.id == walletId) updated else it }, catalog.selectedWalletId, catalog.selectedAccountIndex)
+    }
+
+    @Synchronized
+    fun authorizeWithPin(context: Context, pin: CharArray, action: VaultAction, walletId: String, index: Int? = null, binding: String? = null): VaultAuthorization {
+        grant = null
+        try {
+            checkNotNull(session) { "Carteira bloqueada." }
+            unlockWithPin(context, pin)
+            return issueGrant(action, walletId, index, binding)
+        } finally { pin.fill('\u0000') }
+    }
+
+    @Synchronized
+    fun authorizeWithBiometric(context: Context, cipher: Cipher, action: VaultAction, walletId: String, index: Int? = null, binding: String? = null): VaultAuthorization {
+        grant = null
+        checkNotNull(session) { "Carteira bloqueada." }
+        unlockWithBiometric(context, cipher)
+        return issueGrant(action, walletId, index, binding)
+    }
+
+    private fun issueGrant(action: VaultAction, walletId: String, index: Int?, binding: String?): VaultAuthorization {
+        val current = checkNotNull(session)
+        require(current.snapshot.wallets.any { it.id == walletId })
+        val token = VaultAuthorization()
+        require(action != VaultAction.SignTransfer || binding?.matches(Regex("[0-9a-f]{64}")) == true)
+        grant = Grant(token, current, action, walletId, index, android.os.SystemClock.elapsedRealtime() + 60_000, binding)
+        return token
+    }
+
+    private fun consume(token: VaultAuthorization, action: VaultAction, walletId: String, index: Int? = null, binding: String? = null) {
+        val current = grant
+        grant = null
+        check(current != null && current.token === token && current.session === session && current.action == action &&
+            current.walletId == walletId && current.accountIndex == index && current.binding == binding && android.os.SystemClock.elapsedRealtime() <= current.expiresAt) {
+            "Autentique-se novamente para continuar."
+        }
+    }
+
+    @Synchronized
+    fun removeAccount(context: Context, walletId: String, index: Int, token: VaultAuthorization): WalletAccountsSnapshot {
+        consume(token, VaultAction.RemoveAccount, walletId, index)
+        return updateCatalog(context) { catalog ->
+            val wallet = catalog.wallets.first { it.id == walletId }
+            require(index in wallet.accountNames.indices && index !in wallet.hiddenIndices)
+            if (wallet.accountNames.size - wallet.hiddenIndices.size <= 1)
+                throw WalletAccountException("Mantenha pelo menos uma conta nesta carteira.")
+            val hidden = wallet.hiddenIndices + index
+            val updated = StoredWallet(wallet.id, wallet.name, wallet.mnemonic,
+                wallet.accountNames.mapIndexed { i, old -> if (i == index) "" else old }, hidden)
+            val selected = if (catalog.selectedWalletId == walletId && catalog.selectedAccountIndex == index)
+                wallet.accountNames.indices.first { it !in hidden } else catalog.selectedAccountIndex
+            WalletCatalog(catalog.wallets.map { if (it.id == walletId) updated else it }, catalog.selectedWalletId, selected)
+        }
+    }
+
+    @Synchronized
+    fun revealPhrase(context: Context, walletId: String, token: VaultAuthorization): List<String> {
+        consume(token, VaultAction.RevealPhrase, walletId)
+        val current = checkNotNull(session)
+        return decryptPayload(readRecord(context), current.key).catalog.wallets.first { it.id == walletId }.mnemonic.split(" ")
+    }
+
+    @Synchronized
+    fun changePin(context: Context, walletId: String, newPin: CharArray, token: VaultAuthorization) {
+        var derived: ByteArray? = null
+        try {
+            consume(token, VaultAction.ChangePin, walletId)
+            require(newPin.size == 6 && newPin.all { it in '0'..'9' })
+            val current = checkNotNull(session)
+            val record = readRecord(context)
+            val salt = ByteArray(32).also(random::nextBytes)
+            derived = derivePinKey(newPin, salt)
+            val wrapped = encrypt(SecretKeySpec(derived, "AES"), current.key, pinAad)
+            writeRecord(context, record.copy(pinSalt = salt, pinIv = wrapped.iv, pinWrappedKey = wrapped.ciphertext))
+            clearFailedAttempts(context)
+        } finally { newPin.fill('\u0000'); derived?.fill(0) }
+    }
+
+    @Synchronized
+    fun revokeAuthorization() { grant = null }
+
+    @Synchronized
+    internal fun signTransfer(context: Context, walletId: String, index: Int, quote: PreparedTransfer, token: VaultAuthorization): Pair<String, String> {
+        consume(token, VaultAction.SignTransfer, walletId, index, quote.digest)
+        quote.validate()
+        val destination = quote.recipient.drop(2)
+        if (destination.any { it in 'a'..'f' } && destination.any { it in 'A'..'F' }) {
+            require(wallet.core.jni.Ethereum.addressChecksummed(quote.recipient) == quote.recipient) { "Checksum do endereço inválido." }
+        }
+        val current = checkNotNull(session)
+        val stored = decryptPayload(readRecord(context), current.key).catalog.wallets.first { it.id == walletId }
+        require(index in stored.accountNames.indices && index !in stored.hiddenIndices)
+        require(deriveEvmAddress(stored.mnemonic, index).equals(quote.from, true))
+        System.loadLibrary("TrustWalletCore")
+        val hdWallet = wallet.core.jni.HDWallet(stored.mnemonic, "")
+        val key = hdWallet.getKey(wallet.core.jni.CoinType.ETHEREUM, "m/44'/60'/0'/0/$index").data()
+        try {
+            fun bytes(value: java.math.BigInteger): com.google.protobuf.ByteString {
+                require(value.signum() >= 0)
+                return com.google.protobuf.ByteString.copyFrom(if (value.signum() == 0) byteArrayOf() else value.toByteArray().dropWhile { it == 0.toByte() }.toByteArray())
+            }
+            val transfer = wallet.core.jni.proto.Ethereum.Transaction.newBuilder()
+            if (quote.contract == null) transfer.setTransfer(wallet.core.jni.proto.Ethereum.Transaction.Transfer.newBuilder().setAmount(bytes(quote.units)))
+            else transfer.setErc20Transfer(wallet.core.jni.proto.Ethereum.Transaction.ERC20Transfer.newBuilder()
+                .setTo(quote.recipient).setAmount(bytes(quote.units)))
+            val input = wallet.core.jni.proto.Ethereum.SigningInput.newBuilder()
+                .setPrivateKey(com.google.protobuf.ByteString.copyFrom(key)).setChainId(bytes(quote.chain.chainId.toBigInteger()))
+                .setNonce(bytes(quote.nonce)).setGasPrice(bytes(quote.gasPrice)).setGasLimit(bytes(quote.gasLimit))
+                .setToAddress(quote.to).setTransaction(transfer).build()
+            val result = wallet.core.java.AnySigner.sign(input, wallet.core.jni.CoinType.ETHEREUM, wallet.core.jni.proto.Ethereum.SigningOutput.parser())
+            check(result.error == wallet.core.jni.proto.Common.SigningError.OK && !result.encoded.isEmpty) { "Não foi possível assinar a transação." }
+            val encoded = result.encoded.toByteArray()
+            return "0x" + wallet.core.jni.Hash.keccak256(encoded).hex() to "0x" + encoded.hex()
+        } finally { key.fill(0) }
+    }
+
+    // Chamado somente sob o monitor do cofre: serializa alterações e bloqueio de sessão.
+    private fun updateCatalog(context: Context, transform: (WalletCatalog) -> WalletCatalog): WalletAccountsSnapshot {
+        val authorized = checkNotNull(session) { "Carteira bloqueada." }
+        val record = readRecord(context)
+        val catalog = transform(decryptPayload(record, authorized.key).catalog)
+        val snapshot = catalog.snapshot()
+        val clear = WalletCatalogCodec.encode(catalog)
+        try {
+            val encrypted = encrypt(SecretKeySpec(authorized.key, "AES"), clear, payloadAad)
+            writeRecord(context, record.copy(payloadIv = encrypted.iv, payloadCiphertext = encrypted.ciphertext))
+            // Atualiza a seleção somente depois de a gravação terminar com sucesso.
+            session = VaultSession(authorized.key, snapshot)
+            return snapshot
         } finally {
             clear.fill(0)
         }
@@ -277,25 +510,6 @@ object WalletVault {
         cipher.updateAAD(aad)
         return cipher.doFinal(encrypted)
     }
-
-    private fun encodePayload(name: String, mnemonic: String): ByteArray =
-        ByteArrayOutputStream().use { bytes ->
-            DataOutputStream(bytes).use { output ->
-                output.writeInt(PAYLOAD_MAGIC)
-                output.writeUTF(name)
-                output.writeUTF(mnemonic)
-            }
-            bytes.toByteArray()
-        }
-
-    private fun decodePayload(bytes: ByteArray): WalletData =
-        DataInputStream(ByteArrayInputStream(bytes)).use { input ->
-            check(input.readInt() == PAYLOAD_MAGIC)
-            val name = input.readUTF()
-            val mnemonic = input.readUTF()
-            check(mnemonic.trim().split(Regex("\\s+")).size == 12)
-            WalletData(name, mnemonic)
-        }
 
     private fun encodeRecord(record: VaultRecord): ByteArray =
         ByteArrayOutputStream().use { bytes ->
