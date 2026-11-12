@@ -1,0 +1,26 @@
+{
+  "hostname": "download.caedral.com",
+  "version": "0.1.0-beta.1",
+  "https": true,
+  "cloudflareHttpStatus": 200,
+  "available": true,
+  "originDirectStatus": 403,
+  "originSpoofedHeaderStatus": 403,
+  "unsignedDownloadStatus": 403,
+  "invalidTurnstileStatus": 403,
+  "directApkPathStatus": 404,
+  "apkSha256": "1924bc7c603dc0b8314053226c17f63955245d4dd54aa5211580039c615be96a",
+  "certificateSha256": "9345ab54793487bd981d56c5655054a53b6169bb445551946d25486f74824499",
+  "publicRelease": "https://github.com/leonardo-turque/caedralpay-wallet/releases/tag/v0.1.0-beta.1",
+  "githubHasPublicApk": false,
+  "serverTests": 9,
+  "clientTests": 2,
+  "betaPolicyTests": 7,
+  "humanTurnstileChallengePreviouslyVerified": true,
+  "humanApkDownloadConfirmed": true,
+  "pendingValidations": [
+    "independentSecurityReview",
+    "publicTestnetTokenRoundTrip"
+  ],
+  "humanDownloadEvidence": "Responsável confirmou nesta conversa que o APK baixou após Turnstile no domínio oficial, em 2026-11-12."
+}
