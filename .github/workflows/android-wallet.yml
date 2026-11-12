@@ -36,4 +36,5 @@ jobs:
       - name: Python and shell syntax
         run: |
           python3 -m py_compile scripts/*.py distribution/*.py
+          python3 -m unittest discover -s scripts -p 'test_*.py'
           bash -n qa/run-evm-tests.sh distribution/install-standby.sh distribution/install-tls.sh

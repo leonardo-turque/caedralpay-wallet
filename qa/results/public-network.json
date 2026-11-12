@@ -39,5 +39,73 @@
     "sameAddresses": true,
     "vaultReopened": true,
     "applicationVersionCode": 2
-  }
+  },
+  "transactions": [
+    {
+      "chainId": 97,
+      "asset": "BNB",
+      "from": "0x1985DF544b50aFe586CB777eDdcBd239eF13f02B",
+      "recipient": "0x40dB317E84d64D9a008C0C265C8E60A9BB11c8ab",
+      "units": "2000000000000000",
+      "hash": "0xaa7d2c95f04112903756bcddd863cda71c820bcd94adc5d7209d5188f4481628",
+      "status": "Confirmed",
+      "block": 142303421,
+      "actualFeeWei": "2310000000000"
+    },
+    {
+      "chainId": 97,
+      "asset": "BNB",
+      "from": "0x40dB317E84d64D9a008C0C265C8E60A9BB11c8ab",
+      "recipient": "0x1985DF544b50aFe586CB777eDdcBd239eF13f02B",
+      "units": "1000000000000",
+      "hash": "0x4d7b795da8ff3b4a77d0643e6d84262e8567e7f7b4ce2f07dc106a99e8a7df4c",
+      "status": "Confirmed",
+      "block": 142303456,
+      "actualFeeWei": "2310000000000"
+    },
+    {
+      "chainId": 56,
+      "asset": "BNB",
+      "from": "0x1985DF544b50aFe586CB777eDdcBd239eF13f02B",
+      "recipient": "0x40dB317E84d64D9a008C0C265C8E60A9BB11c8ab",
+      "units": "100000000000000",
+      "hash": "0x79a7f5ef1e8f037939f819b7f5c50818d5484b95fcec47d901e76e18d6c7089f",
+      "status": "Confirmed",
+      "block": 133163175,
+      "actualFeeWei": "1155000000000"
+    },
+    {
+      "chainId": 56,
+      "asset": "USDT",
+      "from": "0x1985DF544b50aFe586CB777eDdcBd239eF13f02B",
+      "recipient": "0x40dB317E84d64D9a008C0C265C8E60A9BB11c8ab",
+      "units": "1000000000000",
+      "hash": "0xc0aee2a1cc2677fb4b114a5b56bfc9b997c1681f9883f60e0d5049a4b7a75282",
+      "status": "Confirmed",
+      "block": 133163211,
+      "actualFeeWei": "2836185000000"
+    },
+    {
+      "chainId": 56,
+      "asset": "USDT",
+      "from": "0x40dB317E84d64D9a008C0C265C8E60A9BB11c8ab",
+      "recipient": "0x1985DF544b50aFe586CB777eDdcBd239eF13f02B",
+      "units": "1000000000000",
+      "hash": "0x86c9d2174a9044e3621433bbf41fda71e288f4f9dcaf95ab230ecd95f6e7b574",
+      "status": "Confirmed",
+      "block": 133163244,
+      "actualFeeWei": "1632345000000"
+    },
+    {
+      "chainId": 56,
+      "asset": "BNB",
+      "from": "0x40dB317E84d64D9a008C0C265C8E60A9BB11c8ab",
+      "recipient": "0x1985DF544b50aFe586CB777eDdcBd239eF13f02B",
+      "units": "1000000000000",
+      "hash": "0xceb08ca51b6d588e16719fc859f0146f1506d0388f4edb2b38d5a86a7ed7a107",
+      "status": "Confirmed",
+      "block": 133163276,
+      "actualFeeWei": "1155000000000"
+    }
+  ]
 }
