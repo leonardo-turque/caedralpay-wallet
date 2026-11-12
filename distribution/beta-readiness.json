@@ -8,15 +8,15 @@
     },
     "deviceRegressionTests": {
       "status": "passed",
-      "evidence": "qa/results/device.json; 39 testes sem falhas/ignorados."
+      "evidence": "qa/results/device-release.json; 39 testes sem falhas/ignorados."
     },
     "localEvmEndToEnd": {
       "status": "passed",
-      "evidence": "qa/results/local-evm.json; 3 testes sem falhas/ignorados."
+      "evidence": "qa/results/local-evm-release.json; 3 testes sem falhas/ignorados."
     },
     "signedReleaseVerification": {
       "status": "passed",
-      "evidence": "qa/results/release.json; apksigner e aapt2 verificaram assinatura própria e ausência de depuração."
+      "evidence": "qa/results/release.json; APK normal recompilado após correção R8, assinatura própria verificada e não depurável, sem regras auxiliares de instrumentação."
     },
     "publicTestnetRoundTrip": {
       "status": "pending",
@@ -35,8 +35,8 @@
       "evidence": "Chave privada local criada; backup fora desta máquina ainda não confirmado."
     },
     "cloudflareAndDownloadDomain": {
-      "status": "pending",
-      "evidence": "download.caedral.com ainda sem DNS; Turnstile requer sitekey/secret reais."
+      "status": "passed",
+      "evidence": "qa/results/distribution.json; HTTPS Full (strict), proxy Cloudflare, origem direta 403, 9 testes e Turnstile humano confirmado pelo responsável."
     },
     "providerCapacity": {
       "status": "pending",
@@ -47,8 +47,8 @@
       "evidence": "Atualização assinada, recuperação e biometria real em mais aparelhos."
     },
     "privacyPublication": {
-      "status": "pending",
-      "evidence": "Documento técnico preparado; responsável e publicação precisam ser confirmados."
+      "status": "passed",
+      "evidence": "https://download.caedral.com/privacy.html publicada e verificada; contato Discord oficial, dados locais/RPC/câmera/biometria e terceiros descritos."
     }
   }
 }

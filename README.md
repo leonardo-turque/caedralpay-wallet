@@ -15,6 +15,8 @@ Uma carteira Android nativa, com identidade visual sóbria e proteção local da
 
 **Versão candidata: `0.1.0-beta.1`. A distribuição pública ainda está bloqueada.** A implementação e os resultados automatizados não substituem os critérios de liberação registrados em [validação do beta](docs/BETA_VALIDACAO.md) e [beta-readiness.json](distribution/beta-readiness.json).
 
+A [página oficial de download](https://download.caedral.com) já usa HTTPS e Turnstile; o APK permanece indisponível até a aprovação dos critérios. [Privacidade](https://download.caedral.com/privacy.html).
+
 ## Visão do produto
 
 A CaedralPay Wallet está sendo construída para dar ao usuário controle das próprias chaves, com uma experiência simples de criar, recuperar e acessar sua carteira. A identidade combina temas claro/escuro, tons minerais, tipografia Manrope e movimento discreto.
@@ -215,23 +217,23 @@ Antes de aprovar uma fase, validar no aparelho de teste:
 5. Importação com frase válida e rejeição de palavras/checksum incorretos.
 6. Recuperação em outro ambiente sem apagar a única instalação existente.
 
-Testes instrumentados do cofre, adulteração do arquivo, invalidação de chaves e falhas de gravação ainda precisam ser ampliados.
+Os relatórios em `qa/results/` registram a cobertura executada. Recuperação e atualização do release, biometria real em outros aparelhos e revisão independente continuam como critérios de liberação.
 
 ## PRs e versões
 
 - `main` é protegida; alterações entram por pull request.
 - Cada fase deve descrever o comportamento, as verificações executadas e os testes manuais pendentes.
 - O desenvolvimento evolui por fases validadas pelo responsável pelo produto.
-- Tags anotadas `vMAJOR.MINOR.PATCH-alpha.N` identificam snapshots de pré-lançamento do repositório. Novas tags são criadas após o merge e não devem ser movidas.
+- Tags anotadas de pré-lançamento (`alpha`, `beta` ou `rc`) identificam snapshots do repositório. Novas tags são criadas após o merge e não devem ser movidas.
 - Tags de documentação podem identificar um novo snapshot sem alterar o binário.
-- `versionCode` e `versionName` do Android são metadados separados: atualmente `1` e `1.0`. Uma tag alpha não representa publicação na Play Store ou um release de produção.
+- `versionCode` e `versionName` do Android são metadados separados: atualmente `2` e `0.1.0-beta.1`. Uma tag de pré-lançamento não representa publicação na Play Store ou um release de produção.
 
 ## Próximas fases
 
-1. Interface principal conforme o desenho aprovado.
-2. Camada de endereços, rede e ativos da BNB Smart Chain.
-3. Consulta de saldos e histórico, recebimento e envio com confirmação explícita.
-4. Expansão dos testes e revisão de segurança.
+1. Validar transferências públicas em testnet e mainnet, recuperação e atualização assinada.
+2. Concluir revisão independente, backup da chave de assinatura e capacidade dos provedores.
+3. Liberar o candidato somente após registrar todas as evidências de aprovação.
+4. Evoluir histórico completo e métricas de resultado com dados adequados.
 5. Estudos separados para pagamentos NFC, split on-chain e integrações externas.
 
 ## Referências

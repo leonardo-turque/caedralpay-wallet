@@ -40,7 +40,17 @@ for port in 18556 18597; do
 done
 adb reverse tcp:18556 tcp:18556
 adb reverse tcp:18597 tcp:18597
-./gradlew --offline --no-configuration-cache -PcaedralIsolatedUiTest=true \
+validation_task=:app:connectedDebugAndroidTest
+validation_variant=debug
+extra_args=()
+if [[ "${CAEDRAL_EVM_RELEASE:-0}" == 1 ]]; then
+    validation_task=:app:connectedReleaseAndroidTest
+    validation_variant=release
+    extra_args+=(-PcaedralReleaseValidation=true)
+    export CAEDRAL_SIGNING_PROPERTIES="${CAEDRAL_SIGNING_PROPERTIES:-$HOME/.local/share/caedralpay/android-signing/signing.properties}"
+fi
+./gradlew --offline --no-configuration-cache -PcaedralIsolatedUiTest=true "${extra_args[@]}" \
     -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true \
     -Pandroid.testInstrumentationRunnerArguments.caedralLocalEvm=true \
-    -Pandroid.testInstrumentationRunnerArguments.class=com.caedralpay.wallet.EvmEndToEndTest :app:connectedDebugAndroidTest
+    -Pandroid.testInstrumentationRunnerArguments.class=com.caedralpay.wallet.EvmEndToEndTest "$validation_task"
+python3 scripts/record-tests.py local-evm --variant "$validation_variant"

@@ -9,8 +9,12 @@ val releaseSecretsFile = providers.environmentVariable("CAEDRAL_SIGNING_PROPERTI
 val releaseSecrets = Properties().apply {
     if (releaseSecretsFile?.isFile == true) releaseSecretsFile.inputStream().use { load(it) }
 }
+val isolatedValidation = providers.gradleProperty("caedralIsolatedUiTest").orNull == "true"
+val releaseValidation = providers.gradleProperty("caedralReleaseValidation").orNull == "true"
+check(!releaseValidation || isolatedValidation) { "Testes release exigem o pacote isolado." }
 
 android {
+    testBuildType = if (releaseValidation) "release" else "debug"
     namespace = "com.caedralpay.wallet"
     compileSdk {
         version = release(37)
@@ -18,12 +22,12 @@ android {
 
     defaultConfig {
         // Validação em pacote separado: nunca substituir a instalação pessoal.
-        applicationId = if (providers.gradleProperty("caedralIsolatedUiTest").orNull == "true") {
+        applicationId = if (isolatedValidation) {
             "com.caedralpay.wallet.validation"
         } else "com.caedralpay.wallet"
         minSdk = 37
         targetSdk = 37
-        versionCode = 2
+        versionCode = providers.gradleProperty("caedralVersionCode").orNull?.toInt()?.also { require(it in 1..2_100_000_000) } ?: 2
         versionName = "0.1.0-beta.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -45,6 +49,7 @@ android {
             isDebuggable = false
             if (releaseSecrets.isNotEmpty()) signingConfig = signingConfigs.getByName("betaRelease")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (releaseValidation) proguardFiles("instrumentation-keep-rules.pro")
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
@@ -71,6 +76,7 @@ tasks.register("verifyReleaseSigning") {
 tasks.matching { it.name == "preReleaseBuild" }.configureEach { dependsOn("verifyReleaseSigning") }
 
 dependencies {
+    if (releaseValidation) add("releaseImplementation", libs.androidx.compose.ui.test.manifest)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
