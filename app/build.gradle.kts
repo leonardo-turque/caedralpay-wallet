@@ -10,6 +10,8 @@ val releaseSecrets = Properties().apply {
     if (releaseSecretsFile?.isFile == true) releaseSecretsFile.inputStream().use { load(it) }
 }
 val isolatedValidation = providers.gradleProperty("caedralIsolatedUiTest").orNull == "true"
+val protocolPreview = providers.gradleProperty("caedralProtocolPreview").orNull == "true"
+check(!protocolPreview || isolatedValidation) { "Protocolo experimental exige instalação isolada." }
 val releaseValidation = providers.gradleProperty("caedralReleaseValidation").orNull == "true"
 val upgradeValidation = providers.gradleProperty("caedralUpgradeValidation").orNull == "true"
 check(!releaseValidation || isolatedValidation) { "Testes release exigem o pacote isolado." }
@@ -35,6 +37,8 @@ android {
         versionName = "0.1.0-beta.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("boolean", "CAEDRAL_PROTOCOL_PREVIEW", "false")
+        resValue("bool", "caedral_nfc_enabled", "false")
     }
 
     signingConfigs {
@@ -49,6 +53,10 @@ android {
         }
     }
     buildTypes {
+        debug {
+            buildConfigField("boolean", "CAEDRAL_PROTOCOL_PREVIEW", protocolPreview.toString())
+            resValue("bool", "caedral_nfc_enabled", protocolPreview.toString())
+        }
         release {
             isDebuggable = false
             if (releaseSecrets.isNotEmpty()) signingConfig = signingConfigs.getByName("betaRelease")
@@ -67,6 +75,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        resValues = true
     }
 }
 

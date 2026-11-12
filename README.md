@@ -45,7 +45,17 @@ A primeira rede integrada é a BNB Smart Chain, em mainnet e testnet, com BNB e 
 | Envio e assinatura/transmissão | BNB/USDT com autenticação vinculada à revisão; E2E local 56/97 e ida/volta pública BNB/USDT mainnet + tBNB testnet verificadas |
 | APK release | Assinado, não depurável, SHA-256/certificado e backup da assinatura confirmado |
 | Download e suporte | Serviço Node/Nginx/Turnstile, manifesto aprovado para o beta; [Discord oficial](https://discord.com/invite/ujR9huP7qK) |
-| Pagamentos NFC e split on-chain | Fases futuras |
+| Protocolo Caedral/NFC | Protótipo isolado de transporte cifrado e contrato experimental; sem pagamento NFC no beta |
+
+## Desenvolvimento da bandeira Caedral
+
+O [protocolo Caedral v0.1](docs/PROTOCOLO_CAEDRAL.md) inicia as credenciais de cinco anos,
+nome escolhido, política de taxa de 1% com piso de 0,10 do ativo, cashback inicial de 0,1%
+e tabela por cartão em 01/02/2027. Inclui SDK Kotlin interno, laboratório NFC opcional e
+contrato Solidity de liquidação com reserva para cashback. **Não está implantado nem integrado
+ao pagamento da Wallet.** O documento distingue o que foi implementado dos requisitos de
+segurança, financiamento, hardware e integrações ainda pendentes. O beta publicado permanece
+sem esses recursos experimentais.
 
 ## Tecnologias em uso
 

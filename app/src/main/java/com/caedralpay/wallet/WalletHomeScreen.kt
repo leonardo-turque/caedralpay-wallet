@@ -188,6 +188,7 @@ fun WalletHomeScreen(
             onActivity = if (enableAccountManagement) ({ sheet = HomeSheet.Activity }) else null)
     }
     when (sheet) {
+        HomeSheet.Nfc -> CaedralNfcSheet(account, network, onDismiss = { sheet = null })
         HomeSheet.Activity -> WalletActivitySheet(account, network, onDismiss = { sheet = null })
         HomeSheet.Appearance -> {
             val appearance = LocalThemeController.current
@@ -201,6 +202,9 @@ fun WalletHomeScreen(
                 }
                 HorizontalDivider(Modifier.padding(vertical = 12.dp), color = C.Divider)
                 BscExternalLinkButton("Suporte no Discord", "https://discord.com/invite/ujR9huP7qK")
+                if (BuildConfig.CAEDRAL_PROTOCOL_PREVIEW) {
+                    TextButton(onClick = { sheet = HomeSheet.Nfc }) { Text("Laboratório NFC Caedral") }
+                }
                 Text("CaedralPay Wallet ${BuildConfig.VERSION_NAME}", color = C.Muted, style = MaterialTheme.typography.bodySmall)
             }
         }
@@ -237,7 +241,7 @@ fun WalletHomeScreen(
     }
 }
 
-private enum class HomeSheet { Accounts, Send, Receive, AssetDetails, Network, Appearance, Activity }
+private enum class HomeSheet { Accounts, Send, Receive, AssetDetails, Network, Appearance, Activity, Nfc }
 
 @Composable
 private fun WalletQuickActions(onSend: () -> Unit, onReceive: () -> Unit, modifier: Modifier = Modifier) {
