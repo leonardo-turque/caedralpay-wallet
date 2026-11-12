@@ -11,7 +11,9 @@ val releaseSecrets = Properties().apply {
 }
 val isolatedValidation = providers.gradleProperty("caedralIsolatedUiTest").orNull == "true"
 val releaseValidation = providers.gradleProperty("caedralReleaseValidation").orNull == "true"
+val upgradeValidation = providers.gradleProperty("caedralUpgradeValidation").orNull == "true"
 check(!releaseValidation || isolatedValidation) { "Testes release exigem o pacote isolado." }
+check(!upgradeValidation || (isolatedValidation && releaseValidation)) { "Teste de atualização exige release isolado." }
 
 android {
     testBuildType = if (releaseValidation) "release" else "debug"
@@ -22,7 +24,9 @@ android {
 
     defaultConfig {
         // Validação em pacote separado: nunca substituir a instalação pessoal.
-        applicationId = if (isolatedValidation) {
+        applicationId = if (upgradeValidation) {
+            "com.caedralpay.wallet.upgradevalidation"
+        } else if (isolatedValidation) {
             "com.caedralpay.wallet.validation"
         } else "com.caedralpay.wallet"
         minSdk = 37

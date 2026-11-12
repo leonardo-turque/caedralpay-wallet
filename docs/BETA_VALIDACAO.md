@@ -12,7 +12,7 @@ PIN/biometria autorizam uma única operação vinculada ao digest. Trust Wallet 
 
 O outbox é cifrado com AES-GCM/Keystore, gravado atomicamente **antes** de enviar. Falha de rede não se transforma em falha financeira nem em nova transação: retomada usa os mesmos bytes/hash/nonce. Uma conta/rede tem um envio em acompanhamento por vez. Nenhum arquivo ilegível é automaticamente apagado ou interpretado como histórico vazio.
 
-Atividade mostra envios criados neste dispositivo e retoma a consulta após reabrir. Após 15 confirmações, verifica o bloco canônico e o status do recibo; para token, exige também o evento Transfer do contrato/destinatário/valor esperados. Após finalizar remove os bytes assinados do registro. Taxa efetiva vem do recibo.
+Atividade mostra envios criados neste dispositivo e retoma a consulta após reabrir. Após 15 confirmações, verifica o bloco canônico e o status do recibo; para token, exige também o evento Transfer do contrato/destinatário/valor esperados. Após finalizar remove os bytes assinados do registro. Mantém até 500 registros, removendo finalizados antigos quando necessário; nunca descarta um envelope pendente para abrir espaço. Taxa efetiva vem do recibo.
 
 Limites atuais: não é um indexador de todas as entradas ou de transações feitas em outras wallets. Substituição de nonce por outro dispositivo, transação descartada sem recibo, reorganização além da janela escolhida e histórico completo exigem validação e tratamento adicionais antes de prometer suporte irrestrito. Não há P&L diário inferido de depósitos.
 
@@ -46,7 +46,7 @@ Servidor de download preparado em `distribution/`, com Node, Nginx e systemd. Tu
 
 A página https://download.caedral.com está publicada com certificado válido, proxy Cloudflare e Full (strict). O responsável confirmou a validação humana do Turnstile. O acesso direto ao IP da origem recebe 403; o acesso pela Cloudflare recebe 200. O APK continua indisponível porque o manifesto permanece `betaApproved=false`. A [privacidade](https://download.caedral.com/privacy.html) foi publicada. Suporte: https://discord.com/invite/ujR9huP7qK.
 
-Evidências registradas: 40 testes JVM, 39 testes instrumentados de regressão e 3 testes EVM locais em debug; mais 39 testes de regressão e 3 EVM no release isolado assinado, com as regras auxiliares de instrumentação descritas acima; 9 testes do serviço de download. O PR #4 passou pelos checks Android e distribuição; ambos são obrigatórios na proteção da main. O smoke separado sem as regras auxiliares registrou criação da Activity e processo ativo; o aparelho estava bloqueado na inspeção, portanto isso não comprova interação visual completa (`qa/results/release-startup.json`). Esses resultados não comprovam transferências em redes públicas nem substituem a revisão independente.
+Evidências registradas: 40 testes JVM, 42 testes instrumentados de regressão (incluindo retenção/adulteração do journal) e 3 testes EVM locais em debug; mais 39 testes de regressão e 3 EVM no release isolado assinado, com as regras auxiliares de instrumentação descritas acima; 9 testes do serviço de download. O PR #4 passou pelos checks Android e distribuição; ambos são obrigatórios na proteção da main. O smoke separado sem as regras auxiliares registrou criação da Activity e processo ativo; o aparelho estava bloqueado na inspeção, portanto isso não comprova interação visual completa (`qa/results/release-startup.json`). Esses resultados não comprovam transferências em redes públicas nem substituem a revisão independente.
 
 A configuração da origem é aplicada por `distribution/restrict-origin.py`, após a instalação TLS. Ela limita somente o virtual host gerenciado às redes oficiais da Cloudflare e loopback, verifica `nginx -t` e confirma o reload pelo marcador de política. Não executar novamente o instalador TLS sem reaplicar e verificar essa restrição.
 
@@ -65,3 +65,8 @@ Para cada critério do JSON, registrar resultado e evidência: relatório automa
 6. Instalar uma versão assinada com a mesma chave sobre a versão anterior de teste e verificar a preservação de contas, cofre, preferências e histórico. Nunca desinstalar a única cópia de uma carteira para tentar contornar assinaturas incompatíveis.
 
 A revisão independente deve cobrir geração/derivação, cofre e Keystore, autenticação por ação, preparação/revisão/assinatura, persistência antes do broadcast e confirmação/retomada. A equipe precisa registrar responsável, escopo, achados e correções; testes internos não preenchem esse critério.
+
+
+## Validação pública e revisão interna
+
+O procedimento executável, fontes oficiais de tokens e limites dos testes ficam em [VALIDACAO_REDES_PUBLICAS.md](VALIDACAO_REDES_PUBLICAS.md). A [revisão interna](REVISAO_INTERNA_BETA.md) registra escopo, achados corrigidos e limitações; não representa auditoria independente. O responsável confirmou a cópia/exportação do backup da assinatura nesta sessão.
