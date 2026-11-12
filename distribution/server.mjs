@@ -22,13 +22,14 @@ export function createDownloadServer(config) {
     return result.success === true && result.hostname === hostname && result.action === 'download';
   });
   return http.createServer(async (req,res) => {
-    const reply = (code, body) => {res.writeHead(code, {'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body));};
+    const reply = (code, body) => {res.writeHead(code, {'Content-Type':'application/json','Cache-Control':'no-store'});res.end(req.method==='HEAD'?undefined:JSON.stringify(body));};
     try {
       res.setHeader('X-Content-Type-Options','nosniff');
       res.setHeader('Referrer-Policy','no-referrer');
       res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; base-uri 'none'; frame-ancestors 'none'");
       if (req.headers.host !== hostname) return reply(400,{error:'host'});
       const url = new URL(req.url, `https://${hostname}`);
+      const retrieval = req.method === 'GET' || req.method === 'HEAD';
       // Bind on localhost behind Nginx. Only trust CF headers when the origin is
       // restricted to Cloudflare; never expose this listener directly.
       const ip = req.headers['cf-connecting-ip'] ?? req.socket.remoteAddress;
@@ -36,7 +37,7 @@ export function createDownloadServer(config) {
       const now = Date.now();
       for (const [key,until] of verifiedTokens) if (until < now) verifiedTokens.delete(key);
       for (const [key,value] of rates) if (value.until < now) rates.delete(key);
-      if (req.method === 'GET' && url.pathname === '/config.json') return reply(200,{sitekey,version:manifest.version,available:manifest.betaApproved === true});
+      if (retrieval && url.pathname === '/config.json') return reply(200,{sitekey,version:manifest.version,available:manifest.betaApproved === true});
       if (req.method === 'POST' && ['/authorize','/verify-challenge'].includes(url.pathname)) {
         if (req.headers.origin !== `https://${hostname}` || req.headers['content-type'] !== 'application/json') return reply(403,{error:'origin'});
         const bucket = rates.get(ip) ?? {count:0,until:now+60_000}; rates.set(ip,bucket);
@@ -54,7 +55,7 @@ export function createDownloadServer(config) {
         const expires = Math.floor(now/1000)+120;
         return reply(200,{url:`/download?expires=${expires}&sig=${signature(expires,ip)}`,sha256:manifest.sha256});
       }
-      if (req.method === 'GET' && url.pathname === '/download') {
+      if (retrieval && url.pathname === '/download') {
         const expires = url.searchParams.get('expires'); const sig = url.searchParams.get('sig');
         if (manifest.betaApproved !== true || !/^\d{10}$/.test(expires??'') || !/^[a-f0-9]{64}$/.test(sig??'') ||
             Number(expires)<now/1000 || Number(expires)>now/1000+121 || !timingSafeEqual(Buffer.from(sig,'hex'),Buffer.from(signature(expires,ip),'hex')))
@@ -62,13 +63,14 @@ export function createDownloadServer(config) {
         const info = await stat(artifactPath);
         res.writeHead(200,{'Content-Type':'application/vnd.android.package-archive','Content-Length':info.size,
           'Content-Disposition':`attachment; filename="caedralpay-wallet-${manifest.version}.apk"`,'Cache-Control':'private, no-store'});
-        createReadStream(artifactPath).on('error',()=>res.destroy()).pipe(res); return;
+        if(req.method==='HEAD')res.end();else createReadStream(artifactPath).on('error',()=>res.destroy()).pipe(res); return;
       }
       const files = new Map([['/','index.html'],['/index.html','index.html'],['/style.css','style.css'],['/app.js','app.js'],['/privacy.html','privacy.html']]);
-      if (req.method === 'GET' && files.has(url.pathname)) {
+      if (retrieval && files.has(url.pathname)) {
         const file = files.get(url.pathname);
-        res.writeHead(200,{'Content-Type':file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':'text/html; charset=utf-8'});
-        return res.end(await readFile(path.join(root,file)));
+        const content = await readFile(path.join(root,file));
+        res.writeHead(200,{'Content-Type':file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':'text/html; charset=utf-8','Content-Length':content.length});
+        return res.end(req.method==='HEAD'?undefined:content);
       }
       reply(404,{error:'not-found'});
     } catch { if (!res.headersSent) reply(503,{error:'Serviço indisponível.'}); else res.destroy(); }

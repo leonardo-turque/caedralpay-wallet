@@ -49,5 +49,5 @@ EOF
 if ! nginx -t; then cp "$backup" "$target"; rm -f "$backup"; exit 1; fi
 rm -f "$backup"
 systemctl reload nginx
-curl --fail --silent --max-time 20 --resolve "$host:443:127.0.0.1" "https://$host/config.json"
+curl --fail --silent --max-time 20 --retry 6 --retry-all-errors --retry-delay 1 --resolve "$host:443:127.0.0.1" "https://$host/config.json"
 echo

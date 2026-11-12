@@ -58,3 +58,9 @@ test('protection can be validated without enabling candidate downloads',()=>fixt
   const result=await request('/verify-challenge',{method:'POST',headers:{Origin:'https://download.example.org','Content-Type':'application/json'},body:JSON.stringify({token:'valid-check'})});
   assert.equal(result.status,200);assert.deepEqual(await result.json(),{verified:true,downloadAvailable:false});
 },false));
+test('download managers can inspect HEAD without receiving the APK body',()=>fixture(async({request,authorize})=>{
+  assert.equal((await request('/config.json',{method:'HEAD'})).status,200);
+  const {url}=await(await authorize('valid-head')).json();const response=await request(url,{method:'HEAD'});
+  assert.equal(response.status,200);assert.equal(await response.text(),'');
+  assert.equal(Number(response.headers.get('content-length')),7);
+}));
