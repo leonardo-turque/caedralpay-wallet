@@ -1,0 +1,54 @@
+{
+  "betaApproved": false,
+  "version": "0.1.0-beta.1",
+  "gates": {
+    "automatedUnitTests": {
+      "status": "passed",
+      "evidence": "qa/results/unit.json; 40 testes sem falhas/ignorados."
+    },
+    "deviceRegressionTests": {
+      "status": "passed",
+      "evidence": "qa/results/device.json; 39 testes sem falhas/ignorados."
+    },
+    "localEvmEndToEnd": {
+      "status": "passed",
+      "evidence": "qa/results/local-evm.json; 3 testes sem falhas/ignorados."
+    },
+    "signedReleaseVerification": {
+      "status": "passed",
+      "evidence": "qa/results/release.json; apksigner e aapt2 verificaram assinatura própria e ausência de depuração."
+    },
+    "publicTestnetRoundTrip": {
+      "status": "pending",
+      "evidence": "Hashes de envio/recebimento e validação no aparelho necessários."
+    },
+    "publicMainnetRoundTrip": {
+      "status": "pending",
+      "evidence": "Validação manual com autenticação do proprietário; sem acesso do agente ao PIN."
+    },
+    "independentSecurityReview": {
+      "status": "pending",
+      "evidence": "Revisão independente do escopo novo de assinatura/transmissão."
+    },
+    "signingKeyBackup": {
+      "status": "pending",
+      "evidence": "Chave privada local criada; backup fora desta máquina ainda não confirmado."
+    },
+    "cloudflareAndDownloadDomain": {
+      "status": "pending",
+      "evidence": "download.caedral.com ainda sem DNS; Turnstile requer sitekey/secret reais."
+    },
+    "providerCapacity": {
+      "status": "pending",
+      "evidence": "RPCs e preço públicos funcionais; capacidade para a coorte beta deve ser medida."
+    },
+    "releaseUpgradeAndRecovery": {
+      "status": "pending",
+      "evidence": "Atualização assinada, recuperação e biometria real em mais aparelhos."
+    },
+    "privacyPublication": {
+      "status": "pending",
+      "evidence": "Documento técnico preparado; responsável e publicação precisam ser confirmados."
+    }
+  }
+}

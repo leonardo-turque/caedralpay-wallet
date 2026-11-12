@@ -9,15 +9,17 @@ Uma carteira Android nativa, com identidade visual sóbria e proteção local da
 ![Android API 37+](https://img.shields.io/badge/Android-API%2037%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4)
-![Status](https://img.shields.io/badge/Status-Alpha-DDD6CD)
+![Status](https://img.shields.io/badge/Status-Beta%20candidate-DDD6CD)
 
 </div>
 
+**Versão candidata: `0.1.0-beta.1`. A distribuição pública ainda está bloqueada.** A implementação e os resultados automatizados não substituem os critérios de liberação registrados em [validação do beta](docs/BETA_VALIDACAO.md) e [beta-readiness.json](distribution/beta-readiness.json).
+
 ## Visão do produto
 
-A CaedralPay Wallet está sendo construída para dar ao usuário controle das próprias chaves, com uma experiência simples de criar, recuperar e acessar sua carteira. A identidade combina fundo escuro, tons minerais, tipografia legível e movimento discreto.
+A CaedralPay Wallet está sendo construída para dar ao usuário controle das próprias chaves, com uma experiência simples de criar, recuperar e acessar sua carteira. A identidade combina temas claro/escuro, tons minerais, tipografia Manrope e movimento discreto.
 
-A primeira rede planejada é a BNB Smart Chain, com USDT como primeiro ativo pretendido. A implementação atual cobre o onboarding e o cofre local; integração RPC, endereços na interface, saldos, envio e recebimento ainda serão desenvolvidos. O aplicativo termina em uma tela preta após autenticação, reservada à futura interface principal.
+A primeira rede integrada é a BNB Smart Chain, em mainnet e testnet, com BNB e USDT em contratos separados. O aplicativo cobre onboarding, cofre, carteiras/contas, QR Code, saldos e total em US$, temas claro/escuro e ações sensíveis autenticadas. O envio prepara e revisa taxas, autentica, assina localmente e transmite; um outbox cifrado preserva hash/nonce para acompanhamento e retomada. Comprar/Trocar permanecem desativados. Histórico completo de entradas, P&L diário real, outros tokens e validações públicas de lançamento continuam fora do que está aprovado para distribuição.
 
 ## Estado atual
 
@@ -32,9 +34,15 @@ A primeira rede planejada é a BNB Smart Chain, com USDT como primeiro ativo pre
 | Cofre local cifrado e gravação atômica | Implementados |
 | Bloqueio ao sair do aplicativo | Implementado para a sessão autenticada |
 | Importação de frase de 12 palavras | Implementada com validação BIP39 local |
-| Interface principal | Placeholder preto |
-| Endereços, saldos e histórico na blockchain | Pendentes |
-| Envio, recebimento e assinatura de transações | Pendentes |
+| Interface principal | Temas Sistema/Claro/Escuro, Manrope, componentes Compose e carregamento de ativos |
+| Carteiras e contas | Seleção/criação/importação, renomeação, remoção local com índices preservados e ações sensíveis autenticadas |
+| Endereços e recebimento | Conta EVM derivada, QR com quantidade opcional e cópia do endereço |
+| Saldos BNB/USDT | Consulta HTTPS real, validação de chain ID/decimais, atualização por conta |
+| Histórico | Envios deste dispositivo, recibos, taxa efetiva e retomada do mesmo hash; indexador completo pendente |
+| Cotação | USD público com validade; BRL e P&L real pendentes |
+| Envio e assinatura/transmissão | BNB/USDT com autenticação vinculada à revisão; E2E local nos IDs 56/97; liberação pública depende dos critérios do beta |
+| APK release | Assinado, não depurável e empacotado como candidato com SHA-256/certificado |
+| Download e suporte | Serviço Node/Nginx/Turnstile, manifesto bloqueado até aprovação; [Discord oficial](https://discord.com/invite/ujR9huP7qK) |
 | Pagamentos NFC e split on-chain | Fases futuras |
 
 ## Tecnologias em uso
@@ -66,7 +74,7 @@ As versões abaixo refletem o repositório; não significam que cada dependênci
 3. Completar quatro palavras selecionadas aleatoriamente, uma em cada fileira.
 4. Definir e confirmar um PIN de seis dígitos.
 5. Habilitar biometria forte ou selecionar “Agora não”.
-6. Salvar o cofre e acessar o placeholder da interface principal.
+6. Salvar o cofre e acessar a interface principal.
 
 ### Importar carteira
 
@@ -76,13 +84,13 @@ As versões abaixo refletem o repositório; não significam que cada dependênci
 4. Escolher um nome e um novo PIN para este aparelho.
 5. Escolher se deseja habilitar a biometria e salvar um novo cofre local.
 
-O fluxo inicial é apresentado como recuperação CaedralPay. Uma frase BIP39 não contém a marca do aplicativo de origem: frases externas de 12 palavras compatíveis também podem ser aceitas. A interface atual não oferece frases de 18/24 palavras, senha BIP39 adicional, importação por chave privada ou múltiplas carteiras.
+O fluxo inicial é apresentado como recuperação CaedralPay. Uma frase BIP39 não contém a marca do aplicativo de origem: frases externas de 12 palavras compatíveis também podem ser aceitas. O seletor interno permite importar outras carteiras e recuperar contas sequenciais. A interface atual não oferece frases de 18/24 palavras, senha BIP39 adicional ou importação por chave privada.
 
 A frase reconstrói as chaves; não transfere o arquivo do celular anterior. O nome, o PIN e a biometria são locais. Recuperar os mesmos endereços também depende do mesmo caminho de derivação e das mesmas configurações. A validação da frase, por si só, não demonstra a existência de saldo ou atividade na rede.
 
 ### Desbloquear
 
-Quando existe um cofre, o aplicativo abre a tela de desbloqueio. A biometria é solicitada automaticamente quando configurada; o PIN permanece disponível. Após autenticação, a tela principal ainda é preta. Ao sair do aplicativo, a sessão autenticada volta ao estado bloqueado.
+Quando existe um cofre, o aplicativo abre a tela de desbloqueio. A biometria é solicitada automaticamente quando configurada; o PIN permanece disponível. Após autenticação, a página principal mostra a carteira e a conta selecionadas. Ao sair do aplicativo, a sessão autenticada volta ao estado bloqueado.
 
 ## Segurança e armazenamento
 
@@ -122,9 +130,21 @@ app/src/main/
 └── AndroidManifest.xml
 ```
 
-As telas usam estado Compose e callbacks. O projeto ainda não possui backend de wallet, banco SQL, camada RPC, injeção de dependências ou uma arquitetura modular MVVM completa. Operações de salvar/desbloquear por PIN usam threads dedicadas; a migração para concorrência estruturada deve ser tratada como uma evolução explícita.
+As telas usam estado Compose e callbacks. A camada RPC é separada dos repositórios de saldo e transações; operações recentes usam coroutines e injeção por construtor para testes. O journal cifrado é local. Não há custódia ou serviço de assinatura remota. Não existe ainda banco SQL, indexador completo, contêiner de DI ou arquitetura modular MVVM; partes do onboarding original continuam usando threads dedicadas.
 
 ## Direção para uma experiência premium
+
+O [plano de estudo e implementação da interface](docs/PLANO_INTERFACE.md) detalha a sequência de fases, os componentes próprios em Compose, o estado da branch de trabalho e os critérios de validação manual.
+
+A [entrega do plano visual](docs/IMPLEMENTACAO_INTERFACE.md) registra a implementação local das fases 0–6, a logo ampliada, a lista/detalhes de ativos, os fluxos visuais e o ambiente isolado de testes Android.
+
+A integração inicial está registrada em [funções essenciais — BNB Smart Chain](docs/FUNCOES_ESSENCIAIS.md). A revisão da página principal reduziu a logo para 80 dp, removeu os avisos/controles extras de rede e passou o total e os ativos para US$. A evolução atual de assinatura/transmissão e seus limites está em [validação do beta](docs/BETA_VALIDACAO.md).
+
+Para começar a validação funcional, siga o [guia da Testnet](docs/TESTNET.md). O app inicia na BSC Testnet quando não existe preferência salva e permite alternar redes pelo ícone ao lado de Ativos. A quantidade tBNB aparece na lista, sem cotação fictícia de BNB real nem reutilização do contrato USDT da mainnet. Não há selo ou texto de testnet no cabeçalho.
+
+O [guia de QR Code](docs/QR_CODE.md) documenta recebimento, preenchimento de pagamentos e importação das 12 palavras pela câmera interna. A leitura nunca transmite automaticamente: revisão e autenticação são etapas separadas.
+
+O [guia de contas, segurança e aparência](docs/CONTAS_SEGURANCA_APARENCIA.md) descreve os menus de conta/carteira, renomeação, remoção sem alterar índices de derivação, revelação e troca de PIN com autenticação por ação, catálogo v3 compatível com os formatos anteriores e temas Sistema/Claro/Escuro.
 
 O acabamento deve vir de consistência, legibilidade, previsibilidade e desempenho medido.
 
@@ -140,7 +160,7 @@ O acabamento deve vir de consistência, legibilidade, previsibilidade e desempen
 | Desempenho | Macrobenchmark e Baseline Profiles, orientados pelos fluxos reais |
 | Qualidade | Testes de UI, recuperação e cofre, com cenários de erro, interrupção e acessibilidade |
 
-Essas tecnologias e práticas são uma direção documentada, não recursos já implementados nem autorização automática para avançar fases. A base segue as [recomendações oficiais de arquitetura Android](https://developer.android.com/topic/architecture/recommendations) e a documentação de [Baseline Profiles](https://developer.android.com/topic/performance/baselineprofiles/overview). O tema global ainda usa configurações padrão/dinâmicas; a consolidação da marca no tema inteiro é trabalho futuro.
+Essas tecnologias e práticas são uma direção documentada, não autorização automática para avançar fases. A base segue as [recomendações oficiais de arquitetura Android](https://developer.android.com/topic/architecture/recommendations) e a documentação de [Baseline Profiles](https://developer.android.com/topic/performance/baselineprofiles/overview). O tema global local já usa uma paleta escura Caedral fixa; a revisão de todas as telas e dos demais itens continua por fases.
 
 ## Executar localmente
 
@@ -178,7 +198,7 @@ O repositório Wallet Core usa as propriedades `caedralGithubUser` e `caedralGit
 ./gradlew --no-configuration-cache :app:lintDebug
 ```
 
-Com um dispositivo de teste dedicado e compatível, os testes instrumentados podem ser executados por `./gradlew :app:connectedDebugAndroidTest`. Esse comando instala o aplicativo e o APK de testes no dispositivo; não deve ser usado inadvertidamente em uma instalação que precise ser preservada.
+Os testes instrumentados podem executar em um pacote separado por `./gradlew --no-configuration-cache -PcaedralIsolatedUiTest=true :app:connectedDebugAndroidTest`. Essa propriedade usa o applicationId `com.caedralpay.wallet.validation`, com dados e chaves separados da wallet normal. O aparelho precisa estar desbloqueado; os testes mantêm a própria Activity de UI acesa, sem alterar as configurações globais de bloqueio. Sem essa propriedade, o comando usa o pacote normal e pode substituir a instalação existente.
 
 O APK de desenvolvimento é gerado em `app/build/outputs/apk/debug/app-debug.apk`. O modo `--offline` funciona apenas com todas as dependências já presentes no cache. O lint pode exigir um download inicial independente das dependências do build.
 
