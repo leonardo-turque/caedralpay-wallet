@@ -35,5 +35,5 @@ jobs:
         run: node --test distribution/server.test.mjs
       - name: Python and shell syntax
         run: |
-          python3 -m py_compile scripts/*.py
+          python3 -m py_compile scripts/*.py distribution/*.py
           bash -n qa/run-evm-tests.sh distribution/install-standby.sh distribution/install-tls.sh

@@ -1,0 +1,11 @@
+{
+  "package": "com.caedralpay.wallet.validation",
+  "releaseSigned": true,
+  "r8Enabled": true,
+  "instrumentationKeepRulesIncluded": false,
+  "instrumentationActivityIncluded": false,
+  "activityStartStatus": "ok",
+  "processAliveAfterLaunch": true,
+  "keyguardLockedAtInspection": true,
+  "scope": "Inicialização do processo/Activity; não valida interação com tela bloqueada nem fluxos financeiros públicos."
+}

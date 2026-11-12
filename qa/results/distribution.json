@@ -1,0 +1,19 @@
+{
+  "tests": 9,
+  "failures": 0,
+  "localNode": "24",
+  "originNode": "22.23.4",
+  "originTests": 9,
+  "hostname": "download.caedral.com",
+  "https": true,
+  "cloudflareSslMode": "strict",
+  "cloudflareProxy": true,
+  "originPeerAllowlist": true,
+  "humanTurnstileVerified": true,
+  "apkPubliclyAvailable": false,
+  "originDirectStatus": 403,
+  "cloudflareStatus": 200,
+  "originPolicy": "cf-peer-v2",
+  "privacyUrl": "https://download.caedral.com/privacy.html",
+  "originSpoofedCloudflareHeaderStatus": 403
+}
