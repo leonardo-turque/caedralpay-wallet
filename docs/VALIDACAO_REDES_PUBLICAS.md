@@ -38,3 +38,8 @@ O runner confere o XML, exige exatamente o método solicitado e exporta apenas m
 A medição de capacidade cobre três rodadas de cinco consultas concorrentes por rede. É uma amostra de funcionamento dos provedores públicos, sem SLA nem promessa de capacidade ilimitada.
 
 `scripts/validate-release-upgrade.py` testa atualização assinada de versionCode 1002 para 1003 em outro UID (`com.caedralpay.wallet.upgradevalidation`), preservando o pacote pessoal e a conta QA financiada. Usa somente a frase pública de fixture, sem fundos, e valida acesso ao cofre, contas, preferências, journal e recuperação em um novo cofre com outro PIN. Não equivale a um teste em outro modelo físico nem à validação da impressão digital de um usuário.
+
+
+## Execução concluída
+
+Passaram os dois envios públicos nativos da chain 97 e os quatro envios BNB/USDT da chain 56. Recibos e saldos estão em `qa/results/public-chain-proof.json`, verificados em RPC alternativo por `scripts/verify-public-receipts.py`. O USDT público da testnet não foi financiado e continua pendente. Total de taxas reais: 0,00000677853 BNB. Saldos restantes continuam nas duas contas QA controladas pela fixture privada do responsável.

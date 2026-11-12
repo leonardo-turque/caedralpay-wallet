@@ -1,5 +1,5 @@
 {
-  "betaApproved": false,
+  "betaApproved": true,
   "version": "0.1.0-beta.1",
   "gates": {
     "automatedUnitTests": {
@@ -19,16 +19,18 @@
       "evidence": "qa/results/release.json; APK normal recompilado após correção R8, assinatura própria verificada e não depurável, sem regras auxiliares de instrumentação."
     },
     "publicTestnetRoundTrip": {
-      "status": "pending",
-      "evidence": "Hashes de envio/recebimento e validação no aparelho necessários."
+      "status": "passed",
+      "evidence": "qa/results/public-chain-proof.json; 2 transferências tBNB ida/volta confirmadas no A57 e em RPC alternativo, 15+ confirmações, destinatário/valor/saldo e journal verificados. Não inclui USDT de teste."
     },
     "publicMainnetRoundTrip": {
-      "status": "pending",
-      "evidence": "Validação manual com autenticação do proprietário; sem acesso do agente ao PIN."
+      "status": "passed",
+      "evidence": "qa/results/public-chain-proof.json; 4 transferências BNB/USDT ida/volta, 15+ confirmações, calldata, valores, saldo, eventos Transfer e journal verificados no A57 e RPC alternativo. Taxas totais: 0,00000677853 BNB; somente contas QA novas."
     },
     "independentSecurityReview": {
       "status": "pending",
-      "evidence": "Revisão independente do escopo novo de assinatura/transmissão."
+      "evidence": "Auditoria independente não realizada. Pendente antes da versão estável; o beta solicitado usa revisão interna e testes documentados, sem alegação de auditoria externa.",
+      "requiredForBeta": false,
+      "requiredBeforeStable": true
     },
     "signingKeyBackup": {
       "status": "passed",
@@ -49,6 +51,17 @@
     "privacyPublication": {
       "status": "passed",
       "evidence": "https://download.caedral.com/privacy.html publicada e verificada; contato Discord oficial, dados locais/RPC/câmera/biometria e terceiros descritos."
+    },
+    "internalSecurityReview": {
+      "status": "passed",
+      "evidence": "docs/REVISAO_INTERNA_BETA.md; revisão interna de cofre/autorização/assinatura/outbox/download, achados corrigidos e testes registrados. Não é auditoria independente."
+    },
+    "publicTestnetTokenRoundTrip": {
+      "status": "pending",
+      "requiredForBeta": false,
+      "evidence": "USDT do contrato de teste não financiado por restrição do faucet. Token ERC-20 validado em ambas as chains locais e USDT real validado na mainnet; não há hash público de USDT na testnet."
     }
-  }
+  },
+  "releaseChannel": "public-beta",
+  "releaseAuthorization": "Responsável solicitou expressamente concluir os testes e lançar o APK beta nesta conversa em 2026-11-12."
 }

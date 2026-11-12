@@ -13,15 +13,15 @@ Uma carteira Android nativa, com identidade visual sóbria e proteção local da
 
 </div>
 
-**Versão candidata: `0.1.0-beta.1`. A distribuição pública ainda está bloqueada.** A implementação e os resultados automatizados não substituem os critérios de liberação registrados em [validação do beta](docs/BETA_VALIDACAO.md) e [beta-readiness.json](distribution/beta-readiness.json).
+**Beta Android: `0.1.0-beta.1`.** Download oficial protegido em [download.caedral.com](https://download.caedral.com). O escopo validado e os critérios do beta estão registrados em [validação do beta](docs/BETA_VALIDACAO.md) e [beta-readiness.json](distribution/beta-readiness.json).
 
-A [página oficial de download](https://download.caedral.com) já usa HTTPS e Turnstile; o APK permanece indisponível até a aprovação dos critérios. [Privacidade](https://download.caedral.com/privacy.html).
+A [página oficial de download](https://download.caedral.com) usa HTTPS, Turnstile e links temporários. O APK é distribuído pelo domínio oficial; os assets APK dos candidatos no GitHub permanecem em rascunho. [Privacidade](https://download.caedral.com/privacy.html).
 
 ## Visão do produto
 
 A CaedralPay Wallet está sendo construída para dar ao usuário controle das próprias chaves, com uma experiência simples de criar, recuperar e acessar sua carteira. A identidade combina temas claro/escuro, tons minerais, tipografia Manrope e movimento discreto.
 
-A primeira rede integrada é a BNB Smart Chain, em mainnet e testnet, com BNB e USDT em contratos separados. O aplicativo cobre onboarding, cofre, carteiras/contas, QR Code, saldos e total em US$, temas claro/escuro e ações sensíveis autenticadas. O envio prepara e revisa taxas, autentica, assina localmente e transmite; um outbox cifrado preserva hash/nonce para acompanhamento e retomada. Comprar/Trocar permanecem desativados. Histórico completo de entradas, P&L diário real, outros tokens e validações públicas de lançamento continuam fora do que está aprovado para distribuição.
+A primeira rede integrada é a BNB Smart Chain, em mainnet e testnet, com BNB e USDT em contratos separados. O aplicativo cobre onboarding, cofre, carteiras/contas, QR Code, saldos e total em US$, temas claro/escuro e ações sensíveis autenticadas. O envio prepara e revisa taxas, autentica, assina localmente e transmite; um outbox cifrado preserva hash/nonce para acompanhamento e retomada. Comprar/Trocar permanecem desativados. Histórico completo de entradas, P&L diário real, outros tokens e auditoria independente continuam como trabalho posterior explicitamente documentado.
 
 ## Estado atual
 
@@ -42,9 +42,9 @@ A primeira rede integrada é a BNB Smart Chain, em mainnet e testnet, com BNB e 
 | Saldos BNB/USDT | Consulta HTTPS real, validação de chain ID/decimais, atualização por conta |
 | Histórico | Envios deste dispositivo, recibos, taxa efetiva e retomada do mesmo hash; indexador completo pendente |
 | Cotação | USD público com validade; BRL e P&L real pendentes |
-| Envio e assinatura/transmissão | BNB/USDT com autenticação vinculada à revisão; E2E local nos IDs 56/97; liberação pública depende dos critérios do beta |
-| APK release | Assinado, não depurável e empacotado como candidato com SHA-256/certificado |
-| Download e suporte | Serviço Node/Nginx/Turnstile, manifesto bloqueado até aprovação; [Discord oficial](https://discord.com/invite/ujR9huP7qK) |
+| Envio e assinatura/transmissão | BNB/USDT com autenticação vinculada à revisão; E2E local 56/97 e ida/volta pública BNB/USDT mainnet + tBNB testnet verificadas |
+| APK release | Assinado, não depurável, SHA-256/certificado e backup da assinatura confirmado |
+| Download e suporte | Serviço Node/Nginx/Turnstile, manifesto aprovado para o beta; [Discord oficial](https://discord.com/invite/ujR9huP7qK) |
 | Pagamentos NFC e split on-chain | Fases futuras |
 
 ## Tecnologias em uso
@@ -217,7 +217,7 @@ Antes de aprovar uma fase, validar no aparelho de teste:
 5. Importação com frase válida e rejeição de palavras/checksum incorretos.
 6. Recuperação em outro ambiente sem apagar a única instalação existente.
 
-Os relatórios em `qa/results/` registram a cobertura executada. Recuperação e atualização do release, biometria real em outros aparelhos e revisão independente continuam como critérios de liberação.
+Os relatórios em `qa/results/` registram a cobertura executada. Atualização assinada e recuperação passaram no A57; biometria física em outros aparelhos e revisão independente permanecem explicitamente fora dessa evidência.
 
 ## PRs e versões
 
@@ -230,9 +230,9 @@ Os relatórios em `qa/results/` registram a cobertura executada. Recuperação e
 
 ## Próximas fases
 
-1. Validar transferências públicas em testnet e mainnet, recuperação e atualização assinada.
-2. Concluir revisão independente, backup da chave de assinatura e capacidade dos provedores.
-3. Liberar o candidato somente após registrar todas as evidências de aprovação.
+1. Acompanhar os testes dos participantes e ampliar a matriz de aparelhos Android 17+.
+2. Concluir auditoria independente antes da versão estável e testar USDT público da testnet quando houver saldo de faucet.
+3. Medir capacidade dos provedores conforme a coorte crescer; a amostra inicial teve cinco consultas concorrentes por rede sem falhas.
 4. Evoluir histórico completo e métricas de resultado com dados adequados.
 5. Estudos separados para pagamentos NFC, split on-chain e integrações externas.
 
