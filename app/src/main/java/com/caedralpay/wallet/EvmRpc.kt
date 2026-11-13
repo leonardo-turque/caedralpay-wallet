@@ -20,7 +20,7 @@ internal class HttpsEvmTransport : EvmTransport {
         require(BscChain.entries.any { endpoint in it.rpcEndpoints })
         require(method in setOf("eth_chainId", "eth_blockNumber", "eth_getBalance", "eth_call", "eth_getCode",
             "eth_getTransactionCount", "eth_gasPrice", "eth_estimateGas", "eth_sendRawTransaction",
-            "eth_getTransactionReceipt", "eth_getTransactionByHash", "eth_getBlockByNumber"))
+            "eth_getTransactionReceipt", "eth_getTransactionByHash", "eth_getBlockByNumber", "eth_getLogs"))
         val id = ids.incrementAndGet()
         val body = JSONObject().put("jsonrpc", "2.0").put("id", id).put("method", method).put("params", JSONArray(params))
             .toString().toByteArray(Charsets.UTF_8)

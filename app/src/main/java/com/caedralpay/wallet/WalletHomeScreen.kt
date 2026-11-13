@@ -63,17 +63,38 @@ fun WalletHomeScreen(
     initialNetwork: BscChain? = null
 ) {
     val context = LocalContext.current.applicationContext
+    val alerts = remember { SnackbarHostState() }
     var network by remember {
         mutableStateOf(initialNetwork ?: if (connectToNetwork) NetworkPreference.load(context) else BscChain.Mainnet)
     }
     var accounts by remember { mutableStateOf(if (enableAccountManagement) WalletVault.accountsSnapshot() else null) }
     var sheet by remember { mutableStateOf<HomeSheet?>(null) }
+    LaunchedEffect(sheet) {
+        if (sheet == null) WalletAlerts.popups.collect { alert -> alerts.showSnackbar(alert.kind.title, withDismissAction = true) }
+    }
     var transferAsset by remember { mutableStateOf(WalletAsset.USDT) }
     var assetDetails by remember { mutableStateOf<AssetPosition?>(null) }
     var transferFromDetails by remember { mutableStateOf(false) }
     val percent = remember { NumberFormat.getNumberInstance(Locale.forLanguageTag("pt-BR")).apply { minimumFractionDigits = 2; maximumFractionDigits = 2 } }
     val account = accounts?.selectedAccount
     val accountKey = "${network.chainId}:" + account?.let { "${accounts?.selectedWalletId}:${it.index}:${it.address}" }
+    LaunchedEffect(accountKey, connectToNetwork) {
+        if (!connectToNetwork || account == null) return@LaunchedEffect
+        val incoming = IncomingActivityWatcher()
+        val outgoing = TransactionEngine(context)
+        while (true) {
+            try {
+                incoming.poll(context, network, account.address)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* No unverified incoming alerts. */ }
+            try {
+                outgoing.history().filter { !it.terminal && it.quote.chain == network && it.quote.from.equals(account.address, true) }
+                    .forEach { outgoing.refresh(it) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* Keep cursor/outbox and retry; no unverified alerts. */ }
+            delay(5_000)
+        }
+    }
     val repository = remember { BscBalanceRepository() }
     val marketRepository = remember { UsdMarketRepository() }
     var prices by remember(accountKey) { mutableStateOf(emptyMap<WalletAsset, BigDecimal>()) }
@@ -133,6 +154,7 @@ fun WalletHomeScreen(
     val changePercent = if (testBalanceKnown) BigDecimal.ZERO else if (!selectionChanged && !connectToNetwork) dailyChangePercent else null
     val hasChange = changeAmount != null && changePercent != null
 
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().background(C.Background).screenEntrance().safeDrawingPadding()
             .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp)
@@ -187,7 +209,11 @@ fun WalletHomeScreen(
             onSelectNetwork = if (connectToNetwork) ({ sheet = HomeSheet.Network }) else null,
             onActivity = if (enableAccountManagement) ({ sheet = HomeSheet.Activity }) else null)
     }
+    SnackbarHost(alerts, modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(16.dp))
+    }
     when (sheet) {
+        HomeSheet.Terminal -> PhysicalTerminalSheet(account, onDismiss = { sheet = null })
+        HomeSheet.Notifications -> WalletNotificationSettings(onDismiss = { sheet = null })
         HomeSheet.Nfc -> CaedralNfcSheet(account, network, onDismiss = { sheet = null })
         HomeSheet.Activity -> WalletActivitySheet(account, network, onDismiss = { sheet = null })
         HomeSheet.Appearance -> {
@@ -202,7 +228,9 @@ fun WalletHomeScreen(
                 }
                 HorizontalDivider(Modifier.padding(vertical = 12.dp), color = C.Divider)
                 BscExternalLinkButton("Suporte no Discord", "https://discord.com/invite/ujR9huP7qK")
+                TextButton(onClick = { sheet = HomeSheet.Notifications }) { Text("Notificações") }
                 if (BuildConfig.CAEDRAL_PROTOCOL_PREVIEW) {
+                    if (network == BscChain.Testnet) TextButton(onClick = { sheet = HomeSheet.Terminal }) { Text("Maquininha · teste") }
                     TextButton(onClick = { sheet = HomeSheet.Nfc }) { Text("Laboratório NFC Caedral") }
                 }
                 Text("CaedralPay Wallet ${BuildConfig.VERSION_NAME}", color = C.Muted, style = MaterialTheme.typography.bodySmall)
@@ -241,7 +269,7 @@ fun WalletHomeScreen(
     }
 }
 
-private enum class HomeSheet { Accounts, Send, Receive, AssetDetails, Network, Appearance, Activity, Nfc }
+private enum class HomeSheet { Accounts, Send, Receive, AssetDetails, Network, Appearance, Activity, Nfc, Notifications, Terminal }
 
 @Composable
 private fun WalletQuickActions(onSend: () -> Unit, onReceive: () -> Unit, modifier: Modifier = Modifier) {

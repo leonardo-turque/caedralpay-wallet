@@ -21,7 +21,9 @@ import kotlinx.coroutines.delay
 /** Only reachable in an explicitly enabled, isolated development build. */
 @Composable
 internal fun CaedralNfcSheet(account: WalletAccount?, network: BscChain, onDismiss: () -> Unit) {
-    val activity = LocalContext.current as Activity
+    val context = LocalContext.current
+    val activity = generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext }
+        .filterIsInstance<Activity>().first()
     val lifecycle = activity.let { (it as androidx.lifecycle.LifecycleOwner).lifecycle }
     val reader = remember { CaedralNfcReader(activity) }
     val received by CaedralNfcSession.invoice.collectAsState()

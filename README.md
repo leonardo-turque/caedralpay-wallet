@@ -45,7 +45,11 @@ A primeira rede integrada é a BNB Smart Chain, em mainnet e testnet, com BNB e 
 | Envio e assinatura/transmissão | BNB/USDT com autenticação vinculada à revisão; E2E local 56/97 e ida/volta pública BNB/USDT mainnet + tBNB testnet verificadas |
 | APK release | Assinado, não depurável, SHA-256/certificado e backup da assinatura confirmado |
 | Download e suporte | Serviço Node/Nginx/Turnstile, manifesto aprovado para o beta; [Discord oficial](https://discord.com/invite/ujR9huP7qK) |
+| Avisos e notificações | Pop-ups locais, saídas do outbox e recebimentos diretos BNB/eventos USDT com a Wallet aberta; sem push/background |
+| Cartão físico / maquininha | Leitura Classic 1K, vínculo local cifrado e revisão em laboratório isolado; sem liquidação |
 | Protocolo Caedral/NFC | Protótipo isolado de transporte cifrado e contrato experimental; sem pagamento NFC no beta |
+
+[Validação do cartão, maquininha e notificações](docs/CARTAO_MAQUININHA_NOTIFICACOES.md) detalha a cobertura, os testes e os limites desta etapa.
 
 ## Desenvolvimento da bandeira Caedral
 

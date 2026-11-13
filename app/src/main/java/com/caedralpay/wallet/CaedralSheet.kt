@@ -28,6 +28,10 @@ internal fun CaedralSheet(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val currentBusy by rememberUpdatedState(busy)
+    val alerts = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) {
+        WalletAlerts.popups.collect { alert -> alerts.showSnackbar(alert.kind.title, withDismissAction = true) }
+    }
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { !currentBusy })
     val scope = rememberCoroutineScope()
     var closing by remember { mutableStateOf(false) }
@@ -49,6 +53,7 @@ internal fun CaedralSheet(
             .background(C.Muted.copy(alpha = 0.5f), RoundedCornerShape(2.dp))) },
         properties = ModalBottomSheetProperties(securePolicy = SecureFlagPolicy.SecureOn)
     ) {
+        Box {
         Column(Modifier.fillMaxWidth().animateContentSize(tween(220)).heightIn(max = 640.dp).imePadding().padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
             Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2,
@@ -58,6 +63,8 @@ internal fun CaedralSheet(
                 }
             }
             content()
+        }
+        SnackbarHost(alerts, modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp))
         }
     }
 }
