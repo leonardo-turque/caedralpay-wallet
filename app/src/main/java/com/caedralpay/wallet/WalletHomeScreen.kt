@@ -69,6 +69,13 @@ fun WalletHomeScreen(
     }
     var accounts by remember { mutableStateOf(if (enableAccountManagement) WalletVault.accountsSnapshot() else null) }
     var sheet by remember { mutableStateOf<HomeSheet?>(null) }
+    var refreshRequest by remember { mutableIntStateOf(0) }
+    // Refresh settled balances even when a modal owns the visible snackbar.
+    LaunchedEffect(connectToNetwork) {
+        if(connectToNetwork)WalletAlerts.popups.collect { alert ->
+            if(alert.kind in setOf(AlertKind.CardPurchaseConfirmed,AlertKind.MerchantPaymentConfirmed,AlertKind.IncomingConfirmed,AlertKind.OutgoingConfirmed))refreshRequest++
+        }
+    }
     LaunchedEffect(sheet) {
         if (sheet == null) WalletAlerts.popups.collect { alert -> alerts.showSnackbar(alert.kind.title, withDismissAction = true) }
     }
@@ -108,7 +115,6 @@ fun WalletHomeScreen(
     var networkSnapshot by remember(accountKey) { mutableStateOf<BscAccountBalances?>(null) }
     var networkLoading by remember(accountKey) { mutableStateOf(connectToNetwork && account != null) }
     var networkError by remember(accountKey) { mutableStateOf<String?>(null) }
-    var refreshRequest by remember { mutableIntStateOf(0) }
     var requestGeneration by remember(accountKey) { mutableLongStateOf(0) }
     LaunchedEffect(accountKey, connectToNetwork) {
         if (!connectToNetwork || account == null || network.isTestnet) return@LaunchedEffect

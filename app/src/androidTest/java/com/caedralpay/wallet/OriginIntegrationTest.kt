@@ -13,6 +13,8 @@ import org.junit.*
 import java.io.File
 import java.net.Socket
 import java.util.UUID
+import java.math.BigInteger
+import java.time.Instant
 
 /** Explicit local-chain test, emulator only. No public-chain keys or funds. */
 class OriginIntegrationTest {
@@ -60,6 +62,11 @@ class OriginIntegrationTest {
         val token=WalletVault.authorizeWithPin(context,"123456".toCharArray(),VaultAction.SignInvoice,wallet,1,OriginAbi.sha(OriginAbi.invoiceDigest(draft.first).hex()))
         return WalletVault.signOriginInvoice(context,wallet,1,draft.first,token) to draft.second
     }
+    private suspend fun assetBalance(address:String,asset:WalletAsset):BigInteger {
+        val hex=if(asset==WalletAsset.BNB)local("eth_getBalance",listOf(address,"latest")) as String
+        else local("eth_call",listOf(mapOf("to" to OriginNetwork.chain.usdtContract!!,"data" to "0x70a08231"+OriginAbi.addr(address)),"latest")) as String
+        return if(asset==WalletAsset.BNB)EvmBalanceCodec.quantity(hex)else EvmBalanceCodec.abiUint(hex)
+    }
     @Test fun nativeAndTokenSettlementCardRegenerationAndMerchantReceipt()=runBlocking {
         val card=WalletVault.createOriginCard(context,wallet,0,"Ana","Silva")
         Assert.assertTrue(card.number.isEmpty());Assert.assertTrue(card.securityCode.isEmpty())
@@ -88,7 +95,19 @@ class OriginIntegrationTest {
             Assert.assertFalse(service.processCommandApdu(OriginApdu.chunks(sealed).last(),null).contentEquals(OriginApdu.ok))
             val merchantEngine=OriginMerchant(context,gateway);val sale=merchantEngine.save(invoice,first)
             if(asset==WalletAsset.USDT)submit(OriginCall(OriginAction.Approve,card.id,invoice=invoice))
+            val treasury="0x"+(local("eth_call",listOf(mapOf("to" to OriginNetwork.address,"data" to "0x"+OriginAbi.selector("treasury()")),"latest")) as String).takeLast(40)
+            val beforePayer=assetBalance(payer.address,asset)
+            val beforeMerchant=assetBalance(merchant.address,asset)
+            val beforeTreasury=assetBalance(treasury,asset)
             val paid=submit(OriginCall(OriginAction.Pay,card.id,invoice=invoice))
+            val receipt=local("eth_getTransactionReceipt",listOf(paid.hash)) as JSONObject
+            val block=local("eth_getBlockByNumber",listOf(receipt.getString("blockNumber"),false)) as JSONObject
+            val split=CaedralProtocol.split(invoice.request.gross,18,CaedralProtocol.Tier.Origin,Instant.ofEpochSecond(EvmBalanceCodec.quantity(block.getString("timestamp")).longValueExact()))
+            val gas=EvmBalanceCodec.quantity(receipt.getString("gasUsed"))*EvmBalanceCodec.quantity(receipt.getString("effectiveGasPrice"))
+            Assert.assertEquals(beforePayer-invoice.request.gross+split.cashback-(if(asset==WalletAsset.BNB)gas else BigInteger.ZERO),assetBalance(payer.address,asset))
+            Assert.assertEquals(beforeMerchant+split.merchant,assetBalance(merchant.address,asset))
+            Assert.assertEquals(beforeTreasury+split.fee-split.cashback,assetBalance(treasury,asset))
+            Assert.assertEquals(BigInteger.ZERO,assetBalance(OriginNetwork.address,asset))
             val confirmed=merchantEngine.poll(sale);Assert.assertEquals(paid.hash,confirmed.hash)
             // A late foreground poll must not overwrite a terminal merchant receipt.
             Assert.assertEquals(paid.hash,OriginSales(context).put(sale.copy(expired=true)).hash)
@@ -97,6 +116,14 @@ class OriginIntegrationTest {
             Assert.assertEquals(paid.quote.call.data,transaction.getString("input"))
             Assert.assertEquals(paid.hash,OriginEngine(context,gateway).history().last().hash)
         }
+        val saved=engine.history().first()
+        val configured=OriginNetwork.address to OriginNetwork.runtimeHash
+        try {
+            OriginNetwork.configureForTest(("0x"+"f".repeat(40)) to configured.second)
+            val restored=engine.history().first()
+            Assert.assertEquals(saved.quote.digest,restored.quote.digest)
+            Assert.assertEquals(configured.first.lowercase(),restored.quote.call.to.lowercase())
+        } finally { OriginNetwork.configureForTest(configured) }
         val regenerate=WalletVault.authorizeWithPin(context,"123456".toCharArray(),VaultAction.RegenerateCard,wallet,0,card.fingerprint)
         val next=WalletVault.createOriginCard(context,wallet,0,"Ana","Costa",regenerate)
         Assert.assertNotEquals(next.id,card.id);submit(OriginCall(OriginAction.Register,next.id,next.expiresAt,registrationSalt=next.salt))

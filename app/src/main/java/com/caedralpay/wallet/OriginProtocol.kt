@@ -8,8 +8,9 @@ import java.security.MessageDigest
 
 /** Addresses are release configuration, never supplied by an NFC peer. */
 internal object OriginNetwork {
-    private const val deploymentAddress = "0x4231568495F9A11C35d08220B1ECb6cE1d076C6a"
-    private const val deploymentHash = "0x49b764ff5c0c326638bf74799ae2396b747ff5e379275c4e80befad2b42d8274"
+    const val previousEnrollmentAddress = "0x4231568495F9A11C35d08220B1ECb6cE1d076C6a"
+    private const val deploymentAddress = "0x1c8151E63461F46058E1196E9A321E0e273C9300"
+    private const val deploymentHash = "0xb3661e12669ca3f93752c4646991fc947bf76cd26fffde7ee35ce47e23e268e0"
     @Volatile private var testConfig: Pair<String,String>? = null
     val address get() = testConfig?.first ?: deploymentAddress
     val runtimeHash get() = testConfig?.second ?: deploymentHash
@@ -75,7 +76,7 @@ internal object OriginAbi {
                 .put("issuedAt",i.issuedAt).put("expiresAt",i.expiresAt)).toString()
     }
     fun register(id: String, salt:String, expiry: Long) = "0x"+selector("registerCard(bytes32,bytes32,uint64)")+id+salt+word(expiry.toBigInteger())
-    fun approve(units: BigInteger) = "0x095ea7b3"+addr(OriginNetwork.address)+word(units)
+    fun approve(units: BigInteger,settlement:String=OriginNetwork.address) = "0x095ea7b3"+addr(settlement)+word(units)
     fun pay(invoice: OriginInvoice, cardId: String): String {
         val signature = invoice.signature.lowercase()
         // Six static tuple slots + dynamic bytes offset + card ID. Tail: bytes length and padding.

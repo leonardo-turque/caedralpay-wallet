@@ -1,7 +1,8 @@
 {
   "chainId": 97,
-  "hash": "0x340b611956fe09139131247c76ec2a96c399234013fc7ac37b511eaea32d8e75",
+  "hash": "0xa948a7a6b21ef955e8ad3a9c68201ec3e8454caeffb67113134be14aa6c831de",
   "holder": "0x1985DF544b50aFe586CB777eDdcBd239eF13f02B",
+  "settlement": "0x1c8151E63461F46058E1196E9A321E0e273C9300",
   "cardId": "577c9caddf693fca93cd74d6ddf4142bd25dd13677c3502e2eb64e77db265dde",
   "expiresAt": 1952305491,
   "registered": true,

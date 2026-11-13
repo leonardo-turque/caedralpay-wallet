@@ -1,14 +1,14 @@
 {
   "date": "2026-11-13",
-  "scope": "Origin development integration; published beta unchanged",
+  "scope": "Universal account card identity and atomic same-asset cashback; published beta unchanged",
   "androidUnitTests": {
     "passed": 60,
     "failed": 0
   },
   "solidityTests": {
-    "passed": 36,
+    "passed": 39,
     "failed": 0,
-    "origin": 10,
+    "origin": 13,
     "previousProtocol": 26,
     "fuzzRunsPerTest": 256
   },
@@ -17,7 +17,7 @@
     "api": 37,
     "localOriginE2E": {
       "passed": true,
-      "seconds": 27.457,
+      "seconds": 27.329,
       "covers": [
         "vault signing",
         "owner-bound card registration",
@@ -30,18 +30,30 @@
         "merchant receipt",
         "merchant terminal state cannot regress",
         "journal restore",
-        "old card invalidation on regeneration"
+        "old card invalidation on regeneration",
+        "payer balance credits cashback minus actual gas",
+        "merchant and treasury exact balance deltas",
+        "same-asset cashback deducted from merchant fee",
+        "outbox destination stable after deployment configuration change"
       ]
     },
-    "originUiTestsPassed": 2,
-    "previousNfcAndAlertTestsPassed": 12
+    "originUiTestsPassed": 3,
+    "previousNfcAndAlertTestsPassed": 12,
+    "cardIdentityUi": {
+      "sameCardMainnetTestnetAndReopen": true,
+      "creationWithoutRpc": true,
+      "encryptedMetadataUnchanged": true,
+      "fullDetailsRequirePin": true
+    }
   },
   "publicTestnet": {
     "chainId": 97,
     "deploymentProof": "protocol/deployments/97-origin.json",
-    "androidCardRegistrationHash": "0x340b611956fe09139131247c76ec2a96c399234013fc7ac37b511eaea32d8e75",
+    "androidCardRegistrationHash": "0xa948a7a6b21ef955e8ad3a9c68201ec3e8454caeffb67113134be14aa6c831de",
     "confirmed": true,
-    "purchaseSent": false
+    "purchaseSent": false,
+    "sameIdAndExpiryOnNewDeployment": true,
+    "cardCredentialsRegenerated": false
   },
   "distributionTestsPassed": 11,
   "hardware": {

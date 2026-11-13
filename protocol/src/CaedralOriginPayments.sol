@@ -30,7 +30,7 @@ contract CaedralOriginPayments is EIP712, ReentrancyGuard {
     function registerCard(bytes32 id, bytes32 salt, uint64 expiresAt) external {
         require(id == sha256(abi.encodePacked("CaedralOriginCardId/v1", msg.sender, salt)), "card id binding");
         require(id != bytes32(0) && !issued[id], "card id");
-        require(expiresAt >= block.timestamp + 1824 days && expiresAt <= block.timestamp + 1827 days, "expiry");
+        require(expiresAt > block.timestamp && expiresAt <= block.timestamp + 1827 days, "expiry");
         issued[id] = true;
         cards[msg.sender] = Card(id, expiresAt);
         emit CardRegistered(msg.sender, id, expiresAt);

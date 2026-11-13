@@ -27,12 +27,14 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import java.util.Locale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
 internal fun OriginCardVisual(name:String,lastFour:String,portrait:Boolean=false,onClick:(()->Unit)?=null) {
-    val shape=RoundedCornerShape(22.dp)
+    val shape=RoundedCornerShape(20.dp)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
       val rotation by animateFloatAsState(if(portrait)90f else 0f,tween(420,easing=FastOutSlowInEasing),label="card-rotation")
       val frame by animateDpAsState(if(portrait)410.dp else maxWidth/1.586f,tween(420),label="card-frame")
@@ -42,11 +44,18 @@ internal fun OriginCardVisual(name:String,lastFour:String,portrait:Boolean=false
         Box(Modifier.requiredSize(width,height).graphicsLayer{rotationZ=rotation}
             .clip(shape).background(Brush.linearGradient(listOf(Color(0xFF263541),Color(0xFF111D28),Color(0xFF071018))))
             .border(1.dp,Color.White.copy(alpha=0.18f),shape).then(if(onClick!=null)Modifier.clickable(onClick=onClick)else Modifier).padding(26.dp)) {
+            Canvas(Modifier.matchParentSize()) {
+                // Subtle directional grain, stable across frames (no shimmer/noise animation).
+                for(i in 0..85) {
+                    val y=size.height*i/85f
+                    drawLine(Color.White.copy(alpha=if(i%3==0).025f else .009f),Offset(0f,y),Offset(size.width,y-size.height*.08f),.55.dp.toPx())
+                }
+            }
             Column(Modifier.align(Alignment.TopStart)) {
                 Text("CAEDRAL",color=Color(0xFFEAE7E0),fontSize=18.sp,letterSpacing=5.sp,fontWeight=FontWeight.Medium)
                 Text("ORIGIN",color=Color(0xFFDDD6CD),fontSize=11.sp,letterSpacing=3.sp,modifier=Modifier.padding(top=6.dp))
             }
-            Image(painterResource(R.drawable.caedralpay),"Caedral Origin",Modifier.align(Alignment.CenterEnd).size(110.dp),colorFilter=ColorFilter.tint(Color(0xFFE4DED4)))
+            Image(painterResource(R.drawable.caedralpay),"Caedral Origin",Modifier.align(Alignment.CenterEnd).size(124.dp),colorFilter=ColorFilter.tint(Color(0xFFE4DED4)))
             Box(Modifier.align(Alignment.CenterStart).size(40.dp,32.dp).clip(RoundedCornerShape(7.dp))
                 .background(Brush.linearGradient(listOf(Color(0xFFE8E2D8),Color(0xFF9A9995)))).border(1.dp,Color.Black.copy(alpha=.2f),RoundedCornerShape(7.dp))) {
                 Canvas(Modifier.fillMaxSize()) {
@@ -55,10 +64,11 @@ internal fun OriginCardVisual(name:String,lastFour:String,portrait:Boolean=false
                     for(y in listOf(.32f,.68f))drawLine(ink,Offset(0f,size.height*y),Offset(size.width,size.height*y),line)
                 }
             }
-            Column(Modifier.align(Alignment.BottomStart)) {
-                Text(name.uppercase(),color=Color(0xFFEAE7E0),fontSize=11.sp,letterSpacing=1.5.sp,maxLines=1)
+            Column(Modifier.align(Alignment.BottomStart).fillMaxWidth(.82f)) {
+                Text(name.uppercase(Locale.ROOT),color=Color(0xFFEAE7E0),fontSize=11.sp,letterSpacing=1.5.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                 Text("••••  ${lastFour.ifEmpty{"••••"}}",color=Color.White.copy(alpha=.6f),fontSize=12.sp,modifier=Modifier.padding(top=5.dp))
             }
+            Image(painterResource(R.drawable.caedralpay),null,Modifier.align(Alignment.BottomEnd).size(18.dp),colorFilter=ColorFilter.tint(Color(0xFFDDD6CD)))
         }
     }
     }

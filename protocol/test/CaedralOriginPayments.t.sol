@@ -18,6 +18,23 @@ contract CaedralOriginPaymentsTest is Test {
     function sig() internal view returns(bytes memory) { (uint8 v,bytes32 r,bytes32 ss)=vm.sign(key,s.invoiceDigest(i)); return abi.encodePacked(r,ss,v); }
     function testNativeAtomicPayment() public { bytes memory a=sig(); vm.prank(buyer); s.pay{value:1 ether}(i,a,id); assertEq(merchant.balance,0.9 ether); assertEq(treasury.balance,0.099 ether); assertTrue(s.paid(merchant,i.id)); assertEq(address(s).balance,0); }
     function testTokenAtomicPayment() public { i.token=address(t); bytes memory a=sig(); vm.prank(buyer); s.pay(i,a,id); assertEq(t.balanceOf(merchant),0.9 ether); assertEq(t.balanceOf(treasury),0.099 ether); assertEq(t.balanceOf(buyer),999.001 ether); assertEq(t.balanceOf(address(s)),0); }
+    function testCashbackIsPaidToBuyerFromFeeInSameNativePurchase() public {
+        i.gross=100 ether; bytes memory signature=sig();
+        vm.prank(buyer); s.pay{value:i.gross}(i,signature,id);
+        assertEq(merchant.balance,99 ether);
+        assertEq(buyer.balance,900.1 ether);
+        assertEq(treasury.balance,0.9 ether);
+        assertEq(address(s).balance,0);
+    }
+    function testCashbackIsPaidInThePurchasedTokenFromFee() public {
+        i.token=address(t); i.gross=100 ether; bytes memory signature=sig();
+        vm.prank(buyer); s.pay(i,signature,id);
+        assertEq(t.balanceOf(merchant),99 ether);
+        assertEq(t.balanceOf(buyer),900.1 ether);
+        assertEq(t.balanceOf(treasury),0.9 ether);
+        assertEq(t.balanceOf(address(s)),0);
+        assertEq(buyer.balance,1000 ether);
+    }
     function testRegenerationInvalidatesOldId() public { bytes32 nextId=sha256(abi.encodePacked("CaedralOriginCardId/v1",buyer,keccak256("new"))); vm.prank(buyer); s.registerCard(nextId,keccak256("new"),uint64(block.timestamp+1826 days)); bytes memory a=sig(); vm.expectRevert(bytes("inactive card")); vm.prank(buyer); s.pay{value:1 ether}(i,a,id); }
     function testCannotReuseAnotherPersonsId() public { vm.expectRevert(bytes("card id binding")); vm.prank(address(33)); s.registerCard(id,salt,uint64(block.timestamp+1826 days)); }
     function testReplayedInvoiceReverts() public { bytes memory a=sig(); vm.prank(buyer); s.pay{value:1 ether}(i,a,id); vm.expectRevert(bytes("invoice used")); vm.prank(buyer); s.pay{value:1 ether}(i,a,id); }
@@ -25,5 +42,14 @@ contract CaedralOriginPaymentsTest is Test {
     function testOriginFebruaryRateDoesNotNeedSubsidy() public { vm.warp(s.CASHBACK_CHANGE()); (uint256 fee,uint256 cb)=s.quote(100 ether); assertEq(fee,1 ether); assertEq(cb,1 ether); }
     function testExpiredInvoiceReverts() public { bytes memory a=sig(); vm.warp(i.expiresAt); vm.expectRevert(bytes("invoice expiry")); vm.prank(buyer); s.pay{value:1 ether}(i,a,id); }
     function testCrossChainSignatureRejected() public { bytes memory a=sig(); vm.chainId(block.chainid+1); vm.expectRevert(bytes("invoice signature")); vm.prank(buyer); s.pay{value:1 ether}(i,a,id); }
+    function testSameCardCanEnrollOnAnotherNetworkLaterWithUnchangedExpiry() public {
+        (,uint64 originalExpiry)=s.cards(buyer);
+        vm.warp(block.timestamp+90 days);
+        vm.chainId(56);
+        CaedralOriginPayments other=new CaedralOriginPayments(treasury,address(t));
+        vm.prank(buyer); other.registerCard(id,salt,originalExpiry);
+        (bytes32 registeredId,uint64 registeredExpiry)=other.cards(buyer);
+        assertEq(registeredId,id);assertEq(registeredExpiry,originalExpiry);
+    }
     function testFuzzConservation(uint128 amount) public { uint256 gross=bound(amount,0.1 ether+1,1000000 ether); (uint256 fee,uint256 cb)=s.quote(gross); assertEq(gross-fee+cb+fee-cb,gross); assertLe(cb,fee); }
 }

@@ -34,7 +34,14 @@ internal class OriginCard(val walletId: String, val index: Int, val holder: Stri
 /** Local credentials, encrypted; one current/pending record per account. Never sent through NFC. */
 internal class OriginCardStore(context: Context, pending: Boolean = false) {
     private val store = PrivateRecordStore(context,if(pending) "origin_card_drafts" else "origin_cards")
-    companion object { private val lock = Any() }
+    companion object {
+        private val lock = Any()
+        // Card identity belongs to an account, never to a chain. Pending enrollment
+        // retains exactly the same credentials while network activation is outstanding.
+        fun latest(context:Context,wallet:String,index:Int):OriginCard? = synchronized(lock) {
+            OriginCardStore(context,true).find(wallet,index) ?: OriginCardStore(context).find(wallet,index)
+        }
+    }
     fun find(wallet: String, index: Int): OriginCard? = synchronized(lock) { all().firstOrNull { it.walletId==wallet && it.index==index } }
     fun findById(id: String): OriginCard? = synchronized(lock) { all().firstOrNull { it.id==id } }
     fun save(card: OriginCard) = synchronized(lock) {

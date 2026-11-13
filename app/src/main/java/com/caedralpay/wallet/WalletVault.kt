@@ -390,7 +390,7 @@ object WalletVault {
     internal fun createOriginCard(context: Context, walletId: String, index: Int, first: String, last: String,
         regeneration: VaultAuthorization? = null): OriginCard {
         val current = checkNotNull(session)
-        val existing = OriginCardStore(context).find(walletId,index)
+        val existing = OriginCardStore.latest(context,walletId,index)
         if(existing != null) consume(requireNotNull(regeneration),VaultAction.RegenerateCard,walletId,index,existing.fingerprint)
         val account = current.snapshot.wallets.first{it.id==walletId}.accounts.first{it.index==index}
         require(OriginJournal(context).all().none { !it.terminal && it.quote.call.kind==OriginAction.Register && it.quote.from.equals(account.address,true) }) { "Aguarde a ativação anterior." }
@@ -443,7 +443,7 @@ object WalletVault {
     @Synchronized
     internal fun signOriginOperation(context:Context,walletId:String,index:Int,q:OriginQuote,token:VaultAuthorization):Pair<String,String> {
         consume(token,VaultAction.SignOrigin,walletId,index,q.digest); q.validate()
-        val localCard=requireNotNull((if(q.call.kind==OriginAction.Register)OriginCardStore(context,true)else OriginCardStore(context)).find(walletId,index))
+        val localCard=requireNotNull(OriginCardStore.latest(context,walletId,index))
         require(localCard.id==q.call.cardId && localCard.holder.equals(q.from,true)) { "Os dados do cartão mudaram. Revise a operação." }
         if(q.call.kind==OriginAction.Register)require(localCard.expiresAt==q.call.expiry && localCard.salt==q.call.registrationSalt)
         originClear(localCard,checkNotNull(session).key).fill(0)

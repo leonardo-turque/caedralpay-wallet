@@ -52,17 +52,17 @@ internal class OriginMerchant(private val context:Context,private val gateway:Ev
             if(confirmed<sale.cursor)return@read sale
             val end=minOf(confirmed,sale.cursor+199)
             val topic="0x"+OriginAbi.hash("Paid(bytes32,address,address,address,uint256,uint256,uint256)").hex()
-            val logs=rpc.call("eth_getLogs",mapOf("address" to OriginNetwork.address,"fromBlock" to sale.cursor.toBigInteger().rpcHex(),
+            val logs=rpc.call("eth_getLogs",mapOf("address" to sale.invoice.request.settlement,"fromBlock" to sale.cursor.toBigInteger().rpcHex(),
                 "toBlock" to end.toBigInteger().rpcHex(),"topics" to listOf(topic,"0x"+sale.invoice.request.id,"0x"+OriginAbi.addr(sale.invoice.request.merchant)))) as? JSONArray ?: error("Recibos indisponíveis")
             require(logs.length()<=1)
             if(logs.length()==1){
                 val log=logs.getJSONObject(0);check(!log.optBoolean("removed"))
                 val hash=log.getString("transactionHash");val receipt=rpc.call("eth_getTransactionReceipt",hash) as? JSONObject ?: error("Recibo indisponível")
-                require(receipt.getString("transactionHash").equals(hash,true) && EvmBalanceCodec.quantity(receipt.getString("status"))==BigInteger.ONE && receipt.getString("to").equals(OriginNetwork.address,true))
+                require(receipt.getString("transactionHash").equals(hash,true) && EvmBalanceCodec.quantity(receipt.getString("status"))==BigInteger.ONE && receipt.getString("to").equals(sale.invoice.request.settlement,true))
                 val height=EvmBalanceCodec.quantity(receipt.getString("blockNumber"));require(height<=confirmed.toBigInteger() && height>=sale.firstBlock.toBigInteger())
                 val block=rpc.call("eth_getBlockByNumber",height.rpcHex(),false) as? JSONObject ?: error("Bloco indisponível")
                 check(block.getString("hash")==receipt.getString("blockHash") && block.getString("hash")==log.getString("blockHash"))
-                OriginReceipt.verify(OriginCall(OriginAction.Pay,"0".repeat(64),invoice=sale.invoice),receipt.getString("from"),receipt,block.getString("timestamp"))
+                OriginReceipt.verify(OriginCall(OriginAction.Pay,"0".repeat(64),invoice=sale.invoice,settlement=sale.invoice.request.settlement),receipt.getString("from"),receipt,block.getString("timestamp"))
                 sales.put(sale.copy(hash=hash)).also{WalletAlerts.publish(context,WalletAlert(AlertKind.MerchantPaymentConfirmed,"97:$hash"))}
             }else {
                 val block=rpc.call("eth_getBlockByNumber",end.toBigInteger().rpcHex(),false) as? JSONObject ?: error("Bloco indisponível")

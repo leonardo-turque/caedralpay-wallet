@@ -12,22 +12,24 @@ import java.util.UUID
 
 internal object WalletOperationGate { val mutex = Mutex() }
 internal enum class OriginAction { Register, ResetApproval, Approve, Pay }
-internal data class OriginCall(val kind: OriginAction, val cardId: String, val expiry: Long = 0, val invoice: OriginInvoice? = null, val registrationSalt:String="") {
+internal data class OriginCall(val kind: OriginAction, val cardId: String, val expiry: Long = 0, val invoice: OriginInvoice? = null, val registrationSalt:String="",val settlement:String=OriginNetwork.address) {
     val token get() = invoice?.request?.token ?: CaedralProtocol.ZERO_ADDRESS
-    val to get() = if(kind==OriginAction.Approve || kind==OriginAction.ResetApproval) requireNotNull(OriginNetwork.chain.usdtContract) else OriginNetwork.address
+    val to get() = if(kind==OriginAction.Approve || kind==OriginAction.ResetApproval) requireNotNull(OriginNetwork.chain.usdtContract) else settlement
     val value get() = if(kind==OriginAction.Pay && token==CaedralProtocol.ZERO_ADDRESS) requireNotNull(invoice).request.gross else BigInteger.ZERO
     val data get() = when(kind) {
         OriginAction.Register -> OriginAbi.register(cardId,registrationSalt,expiry)
-        OriginAction.ResetApproval -> OriginAbi.approve(BigInteger.ZERO)
-        OriginAction.Approve -> OriginAbi.approve(requireNotNull(invoice).request.gross)
+        OriginAction.ResetApproval -> OriginAbi.approve(BigInteger.ZERO,settlement)
+        OriginAction.Approve -> OriginAbi.approve(requireNotNull(invoice).request.gross,settlement)
         OriginAction.Pay -> OriginAbi.pay(requireNotNull(invoice),cardId)
     }
     fun validate() {
         require(cardId.matches(Regex("[0-9a-f]{64}")) && cardId != "0".repeat(64)); OriginNetwork.requireAvailable(OriginNetwork.chain)
+        require(settlement.equals(OriginNetwork.address,true))
+        if(invoice!=null)require(invoice.request.settlement.equals(settlement,true))
         if(kind==OriginAction.Register) require(expiry>Instant.now().epochSecond && registrationSalt.matches(Regex("[0-9a-f]{64}")))
         else { requireNotNull(invoice).validate(); if(kind==OriginAction.Approve || kind==OriginAction.ResetApproval) require(token!=CaedralProtocol.ZERO_ADDRESS) }
     }
-    fun json() = JSONObject().put("kind",kind.name).put("card",cardId).put("expiry",expiry).put("salt",registrationSalt).put("wire",invoice?.wire()?.hex() ?: JSONObject.NULL)
+    fun json() = JSONObject().put("kind",kind.name).put("card",cardId).put("expiry",expiry).put("salt",registrationSalt).put("settlement",settlement).put("wire",invoice?.wire()?.hex() ?: JSONObject.NULL)
     companion object {
         fun decode(o:JSONObject): OriginCall {
             val wire=if(o.isNull("wire"))null else o.getString("wire").hexBytes()
@@ -35,7 +37,7 @@ internal data class OriginCall(val kind: OriginAction, val cardId: String, val e
             val invoice=wire?.let { val base=it.copyOfRange(0,CaedralProtocol.WIRE_SIZE)
                 val issued=java.nio.ByteBuffer.wrap(base.copyOfRange(136,144)).long
                 OriginInvoice(CaedralProtocol.decode(base,issued),it.copyOfRange(CaedralProtocol.WIRE_SIZE,it.size).hex()) }
-            return OriginCall(OriginAction.valueOf(o.getString("kind")),o.getString("card"),o.getLong("expiry"),invoice,o.optString("salt",""))
+            return OriginCall(OriginAction.valueOf(o.getString("kind")),o.getString("card"),o.getLong("expiry"),invoice,o.optString("salt",""),o.optString("settlement",invoice?.request?.settlement ?: OriginNetwork.previousEnrollmentAddress))
         }
     }
 }
@@ -176,7 +178,7 @@ internal object OriginReceipt {
                 OriginAction.Register->topics.length()==3 && topics.optString(1).equals("0x"+OriginAbi.addr(payer),true) &&
                     topics.optString(2).equals("0x"+call.cardId,true) && log.optString("data").equals("0x"+OriginAbi.word(call.expiry.toBigInteger()),true)
                 OriginAction.ResetApproval,OriginAction.Approve->topics.length()==3 && topics.optString(1).equals("0x"+OriginAbi.addr(payer),true) &&
-                    topics.optString(2).equals("0x"+OriginAbi.addr(OriginNetwork.address),true) && log.optString("data").equals("0x"+OriginAbi.word(if(call.kind==OriginAction.ResetApproval)BigInteger.ZERO else call.invoice!!.request.gross),true)
+                    topics.optString(2).equals("0x"+OriginAbi.addr(call.settlement),true) && log.optString("data").equals("0x"+OriginAbi.word(if(call.kind==OriginAction.ResetApproval)BigInteger.ZERO else call.invoice!!.request.gross),true)
                 OriginAction.Pay->{ val i=call.invoice!!.request; val split=CaedralProtocol.split(i.gross,18,CaedralProtocol.Tier.Origin,Instant.ofEpochSecond(EvmBalanceCodec.quantity(timestamp).longValueExact()))
                     topics.length()==4 && topics.optString(1).equals("0x"+i.id,true) && topics.optString(2).equals("0x"+OriginAbi.addr(i.merchant),true) &&
                         topics.optString(3).equals("0x"+OriginAbi.addr(payer),true) && log.optString("data").equals("0x"+OriginAbi.addr(i.token)+OriginAbi.word(i.gross)+OriginAbi.word(split.fee)+OriginAbi.word(split.cashback),true)

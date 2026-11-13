@@ -29,9 +29,9 @@ class OriginPublicRegistrationTest {
             val snapshot=WalletVault.accountsSnapshot();val account=snapshot.selectedAccount
             check(account.address.equals(fixture.getString("address"),true))
             val engine=OriginEngine(context)
-            var record=engine.history().lastOrNull{it.quote.call.kind==OriginAction.Register}
+            var record=engine.history().lastOrNull{it.quote.call.kind==OriginAction.Register && it.quote.call.settlement.equals(OriginNetwork.address,true)}
             if(record==null){
-                val card=OriginCardStore(context,true).find(snapshot.selectedWalletId,account.index) ?: WalletVault.createOriginCard(context,snapshot.selectedWalletId,account.index,"QA","Teste")
+                val card=OriginCardStore.latest(context,snapshot.selectedWalletId,account.index) ?: WalletVault.createOriginCard(context,snapshot.selectedWalletId,account.index,"QA","Teste")
                 val q=engine.prepare(OriginCall(OriginAction.Register,card.id,card.expiresAt,registrationSalt=card.salt),account.address)
                 check(q.fee<=BigDecimal("0.0005").movePointRight(18).toBigIntegerExact())
                 val auth=WalletVault.authorizeWithPin(context,fixture.getString("pin").toCharArray(),VaultAction.SignOrigin,snapshot.selectedWalletId,account.index,q.digest)
@@ -41,7 +41,7 @@ class OriginPublicRegistrationTest {
             Assert.assertEquals(TransactionStatus.Confirmed,record!!.status)
             val saved=OriginCardStore(context).find(snapshot.selectedWalletId,account.index)!!;Assert.assertTrue(engine.isActive(saved))
             File(target.filesDir,"origin-public-result.json").writeText(JSONObject().put("chainId",97).put("hash",record!!.hash).put("holder",account.address)
-                .put("cardId",saved.id).put("expiresAt",saved.expiresAt).put("registered",true).put("confirmed",true).put("purchaseSent",false).toString())
+                .put("settlement",OriginNetwork.address).put("cardId",saved.id).put("expiresAt",saved.expiresAt).put("registered",true).put("confirmed",true).put("purchaseSent",false).toString())
         }finally{pin.fill('\u0000');WalletVault.lock()}
     }
 }
