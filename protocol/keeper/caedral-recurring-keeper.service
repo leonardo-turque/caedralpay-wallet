@@ -1,0 +1,19 @@
+[Unit]
+Description=Caedral recurring testnet payment executor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node %h/Caedral-V2/wallet/protocol/keeper/keeper.mjs
+Environment=CAEDRAL_KEEPER_CONFIG=%h/.local/share/caedralpay/recurring-keeper/config.json
+Restart=on-failure
+RestartSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=%h/.local/share/caedralpay/recurring-keeper
+
+[Install]
+WantedBy=default.target

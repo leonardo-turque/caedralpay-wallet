@@ -1,0 +1,7 @@
+{
+  "chainId": 97,
+  "operator": "0x47de5bC90dC1850DA1fe7D73CCb03c82c278A695",
+  "fundingHash": "0x0513d3dd005de1b82d9233db03862da2c56aa6c07d23dd29996751f487171daf",
+  "budgetWei": "1000000000000000",
+  "customerKeysRequired": false
+}

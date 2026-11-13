@@ -1,0 +1,77 @@
+{
+  "date": "2026-11-13",
+  "scope": "Merchant-selected invoice; biometric-first tap readiness; no manual activation; no overdraft; published beta unchanged",
+  "androidUnitTests": {
+    "passed": 63,
+    "failed": 0
+  },
+  "solidityTests": {
+    "passed": 44,
+    "failed": 0,
+    "origin": 18,
+    "previousProtocol": 26,
+    "fuzzRunsPerTest": 256
+  },
+  "emulator": {
+    "serial": "emulator-5554",
+    "api": 37,
+    "localOriginE2E": {
+      "passed": true,
+      "seconds": 48.517,
+      "covers": [
+        "local account card creation with no activation transaction",
+        "first native and token purchase with automatic first use",
+        "wallet vault signing and single-use authorization",
+        "metadata AEAD tamper rejection",
+        "encrypted chunked APDU software path",
+        "merchant-defined asset and value",
+        "exact ERC20 approval and allowance reset integrated into one bounded purchase consent",
+        "gas price increase rejected after consent",
+        "finished consent cannot be reused",
+        "wallet lock revokes purchase consent",
+        "native balance disappearing after review blocks signing",
+        "zero token balance blocks approval preparation",
+        "payer merchant treasury exact same-asset cashback balance deltas",
+        "15-confirmation canonical receipts and merchant terminal state",
+        "outbox destination remains fixed across configuration change",
+        "background confirmation and stale modal refresh are idempotent",
+        "regeneration and old previously-used card ID rejection after new purchase"
+      ]
+    },
+    "originUiTestsPassed": 4,
+    "previousNfcAndAlertTestsPassed": 12,
+    "cardIdentityUi": {
+      "sameCardMainnetTestnetAndReopen": true,
+      "creationWithoutRpc": true,
+      "encryptedMetadataUnchanged": true,
+      "fullDetailsRequirePin": true,
+      "homeOpenCloseReopen": true,
+      "manualActivationAbsent": true,
+      "tapActionReadyOnBothNetworkViews": true
+    }
+  },
+  "publicTestnet": {
+    "chainId": 97,
+    "deploymentProof": "protocol/deployments/97-origin.json",
+    "readinessProof": "qa/results/origin-public-ready.json",
+    "sameCardIdAndExpiryPreserved": true,
+    "readyWithoutActivation": true,
+    "activationSent": false,
+    "purchaseSent": false,
+    "merchantInvoiceVerified": true,
+    "insufficientFundsBlocked": true
+  },
+  "distributionTestsPassed": 11,
+  "hardware": {
+    "a57InstallPerformedThisStage": false,
+    "twoPhoneRfTested": false,
+    "rc522Used": false
+  },
+  "pending": [
+    "two Android phones: NFC RF and user flows",
+    "public-testnet purchase and merchant receive",
+    "Origin mainnet deployment and validation",
+    "independent security review"
+  ],
+  "mainnetTransactionsSent": false
+}

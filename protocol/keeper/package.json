@@ -1,0 +1,1 @@
+{"name":"caedral-recurring-keeper","private":true,"version":"0.1.0","type":"module","scripts":{"start":"node keeper.mjs"},"dependencies":{"ethers":"6.16.0"}}

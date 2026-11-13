@@ -63,24 +63,74 @@ fun WalletHomeScreen(
     initialNetwork: BscChain? = null
 ) {
     val context = LocalContext.current.applicationContext
+    val alerts = remember { SnackbarHostState() }
     var network by remember {
         mutableStateOf(initialNetwork ?: if (connectToNetwork) NetworkPreference.load(context) else BscChain.Mainnet)
     }
     var accounts by remember { mutableStateOf(if (enableAccountManagement) WalletVault.accountsSnapshot() else null) }
     var sheet by remember { mutableStateOf<HomeSheet?>(null) }
+    var refreshRequest by remember { mutableIntStateOf(0) }
+    // Refresh settled balances even when a modal owns the visible snackbar.
+    LaunchedEffect(connectToNetwork) {
+        if(connectToNetwork)WalletAlerts.popups.collect { alert ->
+            if(alert.kind in setOf(AlertKind.CardPurchaseConfirmed,AlertKind.MerchantPaymentConfirmed,AlertKind.IncomingConfirmed,AlertKind.OutgoingConfirmed))refreshRequest++
+        }
+    }
+    LaunchedEffect(sheet) {
+        if (sheet == null) WalletAlerts.popups.collect { alert -> alerts.showSnackbar(alert.kind.title, withDismissAction = true) }
+    }
     var transferAsset by remember { mutableStateOf(WalletAsset.USDT) }
     var assetDetails by remember { mutableStateOf<AssetPosition?>(null) }
     var transferFromDetails by remember { mutableStateOf(false) }
     val percent = remember { NumberFormat.getNumberInstance(Locale.forLanguageTag("pt-BR")).apply { minimumFractionDigits = 2; maximumFractionDigits = 2 } }
+    if (enableAccountManagement) NotificationWelcome()
     val account = accounts?.selectedAccount
     val accountKey = "${network.chainId}:" + account?.let { "${accounts?.selectedWalletId}:${it.index}:${it.address}" }
+    val cardAccountKey=account?.let{"${accounts?.selectedWalletId}:${it.index}:${it.address}"}
+    var homeCard by remember(cardAccountKey){mutableStateOf<OriginCard?>(null)}
+    LaunchedEffect(cardAccountKey,sheet) {
+        if(sheet==null && enableAccountManagement && account!=null && accounts!=null) {
+            val selectedWallet=accounts!!.selectedWalletId
+            homeCard=try{kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO){OriginCardStore.latest(context,selectedWallet,account.index)}}catch(c:CancellationException){throw c}catch(_:Exception){null}
+        }
+    }
+    LaunchedEffect(accountKey, connectToNetwork) {
+        if (!connectToNetwork || account == null) return@LaunchedEffect
+        val incoming = IncomingActivityWatcher()
+        val outgoing = TransactionEngine(context)
+        val origin = OriginEngine(context)
+        val originMerchant = OriginMerchant(context)
+        val recurring = RecurringEngine(context)
+        val recurringMerchant = RecurringMerchant(context)
+        val recurringActivity = RecurringActivityWatcher()
+        while (true) {
+            try {
+                incoming.poll(context, network, account.address)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* No unverified incoming alerts. */ }
+            try {
+                outgoing.history().filter { !it.terminal && it.quote.chain == network && it.quote.from.equals(account.address, true) }
+                    .forEach { outgoing.refresh(it) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* Keep cursor/outbox and retry; no unverified alerts. */ }
+            if(BuildConfig.CAEDRAL_PROTOCOL_PREVIEW) try {
+                origin.history().filter{!it.terminal && it.quote.from.equals(account.address,true)}.forEach{origin.refresh(it)}
+                OriginSales(context).all().filter{it.hash==null && !it.expired && it.invoice.request.merchant.equals(account.address,true)}.forEach{originMerchant.poll(it)}
+            } catch(cancelled:CancellationException){throw cancelled} catch(_:Exception){ }
+            if(BuildConfig.CAEDRAL_PROTOCOL_PREVIEW) try {
+                recurringActivity.poll(context,account.address)
+                recurring.history().filter{!it.terminal && it.quote.from.equals(account.address,true)}.forEach{recurring.refresh(it)}
+                RecurringOffers(context).all().filter{it.hash==null && !it.expired && it.offer.merchant.equals(account.address,true)}.forEach{recurringMerchant.poll(it)}
+            } catch(cancelled:CancellationException){throw cancelled} catch(_:Exception){ }
+            delay(5_000)
+        }
+    }
     val repository = remember { BscBalanceRepository() }
     val marketRepository = remember { UsdMarketRepository() }
     var prices by remember(accountKey) { mutableStateOf(emptyMap<WalletAsset, BigDecimal>()) }
     var networkSnapshot by remember(accountKey) { mutableStateOf<BscAccountBalances?>(null) }
     var networkLoading by remember(accountKey) { mutableStateOf(connectToNetwork && account != null) }
     var networkError by remember(accountKey) { mutableStateOf<String?>(null) }
-    var refreshRequest by remember { mutableIntStateOf(0) }
     var requestGeneration by remember(accountKey) { mutableLongStateOf(0) }
     LaunchedEffect(accountKey, connectToNetwork) {
         if (!connectToNetwork || account == null || network.isTestnet) return@LaunchedEffect
@@ -133,6 +183,7 @@ fun WalletHomeScreen(
     val changePercent = if (testBalanceKnown) BigDecimal.ZERO else if (!selectionChanged && !connectToNetwork) dailyChangePercent else null
     val hasChange = changeAmount != null && changePercent != null
 
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().background(C.Background).screenEntrance().safeDrawingPadding()
             .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp)
@@ -178,7 +229,13 @@ fun WalletHomeScreen(
         }, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
         WalletQuickActions(onSend = { transferAsset = if (network.isTestnet) WalletAsset.BNB else WalletAsset.USDT; transferFromDetails = false; sheet = HomeSheet.Send },
             onReceive = { transferAsset = if (network.isTestnet) WalletAsset.BNB else WalletAsset.USDT; transferFromDetails = false; sheet = HomeSheet.Receive },
+            onMerchant = { sheet = HomeSheet.Merchant },
             modifier = Modifier.padding(top = 32.dp))
+        if (enableAccountManagement) Box(Modifier.fillMaxWidth().padding(top=24.dp)
+            .clip(RoundedCornerShape(20.dp)).semantics{contentDescription="Abrir cartão"}
+            .clickable(role=Role.Button){sheet=HomeSheet.Cards}) {
+            OriginCardVisual(homeCard?.name ?: "SEU NOME",homeCard?.lastFour.orEmpty())
+        }
         HorizontalDivider(Modifier.padding(top = 32.dp, bottom = 24.dp), color = C.Divider)
         WalletAssetSection(displayedAssets,
             onAsset = { assetDetails = it; sheet = HomeSheet.AssetDetails },
@@ -187,7 +244,14 @@ fun WalletHomeScreen(
             onSelectNetwork = if (connectToNetwork) ({ sheet = HomeSheet.Network }) else null,
             onActivity = if (enableAccountManagement) ({ sheet = HomeSheet.Activity }) else null)
     }
+    SnackbarHost(alerts, modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(16.dp))
+    }
     when (sheet) {
+        HomeSheet.Cards -> accounts?.let { OriginCardsSheet(it,network,onDismiss={sheet=null}) }
+        HomeSheet.Merchant -> accounts?.let { OriginMerchantSheet(it,network,onDismiss={sheet=null}) }
+        HomeSheet.Terminal -> PhysicalTerminalSheet(account, onDismiss = { sheet = null })
+        HomeSheet.Notifications -> WalletNotificationSettings(onDismiss = { sheet = null })
+        HomeSheet.Nfc -> CaedralNfcSheet(account, network, onDismiss = { sheet = null })
         HomeSheet.Activity -> WalletActivitySheet(account, network, onDismiss = { sheet = null })
         HomeSheet.Appearance -> {
             val appearance = LocalThemeController.current
@@ -201,6 +265,11 @@ fun WalletHomeScreen(
                 }
                 HorizontalDivider(Modifier.padding(vertical = 12.dp), color = C.Divider)
                 BscExternalLinkButton("Suporte no Discord", "https://discord.com/invite/ujR9huP7qK")
+                TextButton(onClick = { sheet = HomeSheet.Notifications }) { Text("Notificações") }
+                if (BuildConfig.CAEDRAL_PROTOCOL_PREVIEW) {
+                    if (network == BscChain.Testnet) TextButton(onClick = { sheet = HomeSheet.Terminal }) { Text("Maquininha · teste") }
+                    TextButton(onClick = { sheet = HomeSheet.Nfc }) { Text("Laboratório NFC Caedral") }
+                }
                 Text("CaedralPay Wallet ${BuildConfig.VERSION_NAME}", color = C.Muted, style = MaterialTheme.typography.bodySmall)
             }
         }
@@ -237,12 +306,12 @@ fun WalletHomeScreen(
     }
 }
 
-private enum class HomeSheet { Accounts, Send, Receive, AssetDetails, Network, Appearance, Activity }
+private enum class HomeSheet { Accounts, Send, Receive, AssetDetails, Network, Appearance, Activity, Nfc, Notifications, Terminal, Cards, Merchant }
 
 @Composable
-private fun WalletQuickActions(onSend: () -> Unit, onReceive: () -> Unit, modifier: Modifier = Modifier) {
-    val actions = listOf(Triple("Comprar", CaedralSymbol.Buy, false), Triple("Trocar", CaedralSymbol.Swap, false),
-        Triple("Enviar", CaedralSymbol.Send, true), Triple("Receber", CaedralSymbol.Receive, true))
+private fun WalletQuickActions(onSend: () -> Unit, onReceive: () -> Unit, onMerchant: () -> Unit, modifier: Modifier = Modifier) {
+    val actions = listOf(Triple("Trocar", CaedralSymbol.Swap, false), Triple("Enviar", CaedralSymbol.Send, true),
+        Triple("Receber", CaedralSymbol.Receive, true), Triple("Maquininha", CaedralSymbol.Terminal, true))
     val largeFont = LocalDensity.current.fontScale > 1.3f
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val columns = if (maxWidth < 300.dp || largeFont) 2 else 4
@@ -253,7 +322,7 @@ private fun WalletQuickActions(onSend: () -> Unit, onReceive: () -> Unit, modifi
                         Column(
                             Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(if (enabled) C.Selected else C.Panel)
                                 .clickable(enabled = enabled, role = Role.Button) {
-                                    if (symbol == CaedralSymbol.Send) onSend() else onReceive()
+                                    when(symbol){CaedralSymbol.Send->onSend();CaedralSymbol.Terminal->onMerchant();else->onReceive()}
                                 }.heightIn(min = 96.dp).padding(horizontal = 4.dp, vertical = 18.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(14.dp)

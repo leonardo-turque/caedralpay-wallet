@@ -21,7 +21,7 @@ A [página oficial de download](https://download.caedral.com) usa HTTPS, Turnsti
 
 A CaedralPay Wallet está sendo construída para dar ao usuário controle das próprias chaves, com uma experiência simples de criar, recuperar e acessar sua carteira. A identidade combina temas claro/escuro, tons minerais, tipografia Manrope e movimento discreto.
 
-A primeira rede integrada é a BNB Smart Chain, em mainnet e testnet, com BNB e USDT em contratos separados. O aplicativo cobre onboarding, cofre, carteiras/contas, QR Code, saldos e total em US$, temas claro/escuro e ações sensíveis autenticadas. O envio prepara e revisa taxas, autentica, assina localmente e transmite; um outbox cifrado preserva hash/nonce para acompanhamento e retomada. Comprar/Trocar permanecem desativados. Histórico completo de entradas, P&L diário real, outros tokens e auditoria independente continuam como trabalho posterior explicitamente documentado.
+A primeira rede integrada é a BNB Smart Chain, em mainnet e testnet, com BNB e USDT em contratos separados. O aplicativo cobre onboarding, cofre, carteiras/contas, QR Code, saldos e total em US$, temas claro/escuro e ações sensíveis autenticadas. O envio prepara e revisa taxas, autentica, assina localmente e transmite; um outbox cifrado preserva hash/nonce para acompanhamento e retomada. Trocar permanece desativado; a ação Comprar foi substituída por Maquininha. Histórico completo de entradas, P&L diário real, outros tokens e auditoria independente continuam como trabalho posterior explicitamente documentado.
 
 ## Estado atual
 
@@ -45,7 +45,21 @@ A primeira rede integrada é a BNB Smart Chain, em mainnet e testnet, com BNB e 
 | Envio e assinatura/transmissão | BNB/USDT com autenticação vinculada à revisão; E2E local 56/97 e ida/volta pública BNB/USDT mainnet + tBNB testnet verificadas |
 | APK release | Assinado, não depurável, SHA-256/certificado e backup da assinatura confirmado |
 | Download e suporte | Serviço Node/Nginx/Turnstile, manifesto aprovado para o beta; [Discord oficial](https://discord.com/invite/ujR9huP7qK) |
-| Pagamentos NFC e split on-chain | Fases futuras |
+| Avisos e notificações | Convite na primeira home, notificações privadas e recibos de entrada/saída/compra com o app aberto; sem push/background |
+| Cartão físico / maquininha | Leitura Classic 1K, vínculo local cifrado e revisão em laboratório isolado; sem liquidação |
+| Origin e maquininha NFC | Integração de desenvolvimento em BSC testnet: cartão pronto sem ativação, dados cifrados, regeneração, HCE, split on-chain e recorrência por autorização inicial; RF entre dois celulares pendente, fora do beta publicado |
+
+[Validação do cartão, maquininha e notificações](docs/CARTAO_MAQUININHA_NOTIFICACOES.md) detalha a cobertura, os testes e os limites desta etapa.
+
+## Desenvolvimento da bandeira Caedral
+
+A [integração Origin](docs/ORIGIN_INTEGRACAO.md) conecta a área de cartões e a maquininha ao cofre/assinador e ao contrato próprio em BSC testnet. Inclui um cartão por conta, com os mesmos dados em todas as redes, validade de cinco anos, dados cifrados com revelação autenticada, regeneração, cobrança assinada EIP-712 e NFC HCE cifrado. Não exige ativação por rede/moeda: o primeiro uso on-chain é incluído na compra. O lojista determina rede, moeda e valor; o cliente abre o cartão com biometria prioritária e usa PIN como alternativa. O pagamento recusa saldo insuficiente, incluindo o teto de gás; cashback não é crédito antecipado. A compra usa o saldo da conta vinculada e devolve o cashback na mesma moeda e transação, descontando-o da taxa Caedral.
+
+A home apresenta o cartão da conta como acesso ao painel e as ações Trocar (desativado), Enviar, Receber e Maquininha. A prontidão de aproximação exige revalidação a cada 60 segundos, com nova autenticação para renovar.
+
+A [maquininha e recorrência](docs/RECORRENCIA.md) organiza a cobrança por rede, moeda, tipo, intervalo/encerramento e valor. O débito automático usa autorização inicial EIP-7702 e um executor independente, com saldo da conta original, cancelamento on-chain, sem crédito nem saldo negativo. Parcelamento não integra o fluxo.
+
+A taxa é 1% com piso literal de 0,10 do ativo; cashback Origin inicial de 0,1%, passando a 1% em 01/02/2027. [Deployment verificável](protocol/deployments/97-origin.json). Não existe implantação mainnet do Origin nesta fase. O [rascunho anterior](docs/PROTOCOLO_CAEDRAL.md) preserva a pesquisa de outros níveis, separada desta implementação. O APK público continua sem a nova integração até a validação manual NFC.
 
 ## Tecnologias em uso
 

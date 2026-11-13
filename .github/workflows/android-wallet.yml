@@ -26,6 +26,24 @@ jobs:
           test -f "$ANDROID_HOME/platforms/android-37.0/android.jar"
       - name: Build, unit tests and lint
         run: ./gradlew --no-configuration-cache :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug
+      - name: Isolated NFC prototype build and tests
+        run: ./gradlew --no-configuration-cache :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug -PcaedralIsolatedUiTest=true -PcaedralProtocolPreview=true
+  protocol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1
+        with:
+          version: v1.8.7
+      - name: Settlement and adversarial tests
+        run: forge test --root protocol -vv
+      - name: Recurring keeper E2E on local Anvil
+        run: |
+          npm ci --prefix protocol/keeper --ignore-scripts --no-audit --no-fund
+          python3 qa/run-origin-tests.py --keeper-only
   distribution:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -35,6 +53,6 @@ jobs:
         run: node --test distribution/*.test.mjs
       - name: Python and shell syntax
         run: |
-          python3 -m py_compile scripts/*.py distribution/*.py
+          python3 -m py_compile scripts/*.py distribution/*.py qa/run-origin-tests.py
           python3 -m unittest discover -s scripts -p 'test_*.py'
           bash -n qa/run-evm-tests.sh distribution/install-standby.sh distribution/install-tls.sh

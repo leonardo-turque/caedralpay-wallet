@@ -23,6 +23,7 @@ internal data class WalletTransaction(val quote: PreparedTransfer, val hash: Str
 
 /** Durable encrypted outbox: persist BEFORE broadcasting. Never overwrite an unreadable journal. */
 internal class TransactionJournal(context: Context, private val capacity: Int = 500) {
+    private val context = context
     init { require(capacity in 1..500) }
     private val file = AtomicFile(context.filesDir.resolve("wallet_activity.bin"))
     private val aad = "CaedralPay/activity/v1".toByteArray()
@@ -69,6 +70,7 @@ internal class TransactionJournal(context: Context, private val capacity: Int = 
             val stream = file.startWrite()
             try { stream.write(encrypted); file.finishWrite(stream) } catch (failure: Throwable) { file.failWrite(stream); throw failure }
         } finally { clear.fill(0) }
+        WalletAlerts.outgoing(context, record)
     }
 
     private fun key(create: Boolean): SecretKey {

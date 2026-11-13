@@ -1,0 +1,21 @@
+{
+  "chainId": 97,
+  "address": "0x4231568495F9A11C35d08220B1ECb6cE1d076C6a",
+  "runtimeHash": "0x49b764ff5c0c326638bf74799ae2396b747ff5e379275c4e80befad2b42d8274",
+  "transactionHash": "0x2779ed2bde7308d8dc0265d4dd1ee8b52ed777317a5661eeb41a70bb79ff8d22",
+  "nonce": 2,
+  "blockNumber": 142416627,
+  "blockHash": "0x83c5b5efb12fd8d6ec637657be30a85d5418eb6c577e86eb805b542f739f2d72",
+  "treasury": "0xE0806659f2E8dAD6a1Fa59539D731E6349A20314",
+  "treasuryDerivationIndex": 2,
+  "token": "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd",
+  "deployer": "0x1985DF544b50aFe586CB777eDdcBd239eF13f02B",
+  "gasUsed": "1503307",
+  "feeWei": "165363770000000",
+  "confirmations": 15,
+  "compiler": "0.8.28",
+  "optimizerRuns": 200,
+  "compiledRuntimeVerified": true,
+  "status": "superseded-before-public-beta",
+  "reason": "Allow the same five-year card to enroll on another deployment later without replacing its credentials."
+}

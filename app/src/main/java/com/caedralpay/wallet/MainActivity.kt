@@ -117,6 +117,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        CaedralNfcSession.clear()
+        OriginTapSession.clear()
         WalletVault.lock()
         lockWallet?.invoke()
     }

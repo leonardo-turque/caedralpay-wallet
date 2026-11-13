@@ -1,0 +1,29 @@
+{
+  "chainId": 97,
+  "treasury": "0xE0806659f2E8dAD6a1Fa59539D731E6349A20314",
+  "token": "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd",
+  "settlement": {
+    "address": "0xBB4096a2cE016eCb8306Cb51EB6AbfeA4668a1F4",
+    "runtimeHash": "0x9713d8b0ce0aacc51e5e2de86b52db7a41b0be55c73cd4e5bcf4e82f5b21a9cf",
+    "transactionHash": "0xa1909a136bee523c9c381af409c35abcd2407c29eda7de7f996967bb5a4fb19c",
+    "blockNumber": 142532917,
+    "blockHash": "0x123d79d9b69bd213b65cc378e7d20f2f19d8afc99125657de20668f503b96dbc",
+    "gasUsed": "1962934",
+    "feeWei": "215922740000000",
+    "confirmations": 15,
+    "compiledRuntimeVerified": true
+  },
+  "account": {
+    "address": "0x608b2c74938bd76d510A8DFAE50641f8a67e21C4",
+    "runtimeHash": "0x34017bb5cd93fe69fd04ff920a23dadbdce42d5c7bf34e540f7c2b5527ca4503",
+    "transactionHash": "0xdbb2f2b0ae0e0164b279dd1d410d521ca8791e4fc9cdd03b0d3e552a3f80ff5a",
+    "blockNumber": 142532951,
+    "blockHash": "0xcf9fc8105d981e256e7fba10318d4a0862d9bd68a633dab714f04f44e94fefc7",
+    "gasUsed": "324382",
+    "feeWei": "35682020000000",
+    "confirmations": 15,
+    "compiledRuntimeVerified": true
+  },
+  "compiler": "0.8.28",
+  "optimizerRuns": 200
+}
