@@ -1,5 +1,7 @@
 # Cartão físico, celular como leitor e avisos locais
 
+> Registro histórico do protótipo. A integração Origin posterior, incluindo deployment testnet e fluxo real do assinador, está em [ORIGIN_INTEGRACAO.md](ORIGIN_INTEGRACAO.md). Os limites abaixo descrevem aquela etapa anterior.
+
 12/11/2026. Continuação do protótipo no PR de desenvolvimento do protocolo. O beta público não foi atualizado.
 
 ## Cartão e maquininha

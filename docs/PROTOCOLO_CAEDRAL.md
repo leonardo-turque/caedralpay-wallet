@@ -1,5 +1,7 @@
 # Protocolo Caedral — rascunho técnico v0.1
 
+> Registro histórico do protótipo. A integração Origin posterior, incluindo deployment testnet e fluxo real do assinador, está em [ORIGIN_INTEGRACAO.md](ORIGIN_INTEGRACAO.md). Os limites abaixo descrevem aquela etapa anterior.
+
 Atualizado em 12/11/2026. Implementação experimental, sem deployment, sem alteração do beta distribuído. Esta versão inicia o desenvolvimento; não representa protocolo completo, auditado ou habilitado para pagamentos reais.
 
 ## Regras de produto aprovadas

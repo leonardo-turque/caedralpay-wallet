@@ -1,0 +1,59 @@
+{
+  "date": "2026-11-13",
+  "scope": "Origin development integration; published beta unchanged",
+  "androidUnitTests": {
+    "passed": 60,
+    "failed": 0
+  },
+  "solidityTests": {
+    "passed": 36,
+    "failed": 0,
+    "origin": 10,
+    "previousProtocol": 26,
+    "fuzzRunsPerTest": 256
+  },
+  "emulator": {
+    "serial": "emulator-5554",
+    "api": 37,
+    "localOriginE2E": {
+      "passed": true,
+      "seconds": 27.457,
+      "covers": [
+        "vault signing",
+        "owner-bound card registration",
+        "one-use authorization",
+        "metadata AEAD tamper rejection",
+        "encrypted chunked APDU software path",
+        "native payment",
+        "exact ERC20 approval and payment",
+        "15-confirmation canonical receipts",
+        "merchant receipt",
+        "merchant terminal state cannot regress",
+        "journal restore",
+        "old card invalidation on regeneration"
+      ]
+    },
+    "originUiTestsPassed": 2,
+    "previousNfcAndAlertTestsPassed": 12
+  },
+  "publicTestnet": {
+    "chainId": 97,
+    "deploymentProof": "protocol/deployments/97-origin.json",
+    "androidCardRegistrationHash": "0x340b611956fe09139131247c76ec2a96c399234013fc7ac37b511eaea32d8e75",
+    "confirmed": true,
+    "purchaseSent": false
+  },
+  "distributionTestsPassed": 11,
+  "hardware": {
+    "a57InstallPerformedThisStage": false,
+    "twoPhoneRfTested": false,
+    "rc522Used": false
+  },
+  "pending": [
+    "two Android phones: NFC RF and user flows",
+    "public-testnet purchase and merchant receive",
+    "Origin mainnet deployment and validation",
+    "independent security review"
+  ],
+  "mainnetTransactionsSent": false
+}

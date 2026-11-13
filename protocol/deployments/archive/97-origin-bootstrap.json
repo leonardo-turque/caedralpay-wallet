@@ -1,0 +1,22 @@
+{
+  "chainId": 97,
+  "address": "0xE4438B711Bf15117400c52CFCafb380296d07454",
+  "runtimeHash": "0x74ccf38386d8639c27617fc24c8d72c4458e4a2c1b8f32a9e17fb0ec64ff3ddb",
+  "transactionHash": "0x4eec60b717134476dfe9dc11fa5dd95f2fddb554b7bb7a99293d1e22f6a16b8c",
+  "nonce": 1,
+  "blockNumber": 142413614,
+  "blockHash": "0x3ca1db560e89c6c4241e0da92dcd71972fa9f62ad8bb28d498a7783c593053f3",
+  "treasury": "0xE0806659f2E8dAD6a1Fa59539D731E6349A20314",
+  "treasuryDerivationIndex": 2,
+  "token": "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd",
+  "deployer": "0x1985DF544b50aFe586CB777eDdcBd239eF13f02B",
+  "gasUsed": "1448325",
+  "feeWei": "159315750000000",
+  "confirmations": 15,
+  "compiler": "0.8.28",
+  "optimizerRuns": 200,
+  "compiledRuntimeVerified": true,
+  "status": "superseded-before-wallet-release",
+  "reason": "Bind card IDs to holder and salt to prevent reservation front-running",
+  "sourceSha256": "cbde39d69178a65949de183ee8c7616bc7b2c0a6238934fc7a1baf3d391598f3"
+}

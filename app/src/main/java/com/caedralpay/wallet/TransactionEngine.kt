@@ -12,9 +12,10 @@ internal class TransactionEngine(context: Context, private val gateway: EvmGatew
     private val context = context
     private val journal = TransactionJournal(context)
     private val repository = TransferRepository(gateway)
-    companion object { private val submission = Mutex() }
+    companion object { private val submission = WalletOperationGate.mutex }
 
     suspend fun send(quote: PreparedTransfer, walletId: String, accountIndex: Int, token: VaultAuthorization): WalletTransaction = submission.withLock {
+        require(OriginJournal(context).all().none { !it.terminal && quote.chain==OriginNetwork.chain && it.quote.from.equals(quote.from,true) }) { "Há uma operação do cartão em acompanhamento." }
         // Once signing starts, cancellation must not lose the durable signed envelope.
         repository.validateCurrent(quote)
         withContext(NonCancellable + Dispatchers.IO) {

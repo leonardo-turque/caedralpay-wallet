@@ -17,7 +17,7 @@ import java.security.MessageDigest
 internal enum class AlertKind(val title: String) {
     OutgoingPending("Envio em andamento"), OutgoingConfirmed("Envio confirmado"),
     OutgoingFailed("Envio não concluído"), IncomingConfirmed("Recebimento confirmado"),
-    CardDetected("Cartão reconhecido"), CardPurchaseConfirmed("Compra confirmada")
+    CardDetected("Cartão reconhecido"), MerchantPaymentConfirmed("Pagamento recebido"), CardPurchaseConfirmed("Compra confirmada")
 }
 internal data class WalletAlert(val kind: AlertKind, val reference: String) {
     init { require(reference.length in 1..256) }

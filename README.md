@@ -45,21 +45,17 @@ A primeira rede integrada é a BNB Smart Chain, em mainnet e testnet, com BNB e 
 | Envio e assinatura/transmissão | BNB/USDT com autenticação vinculada à revisão; E2E local 56/97 e ida/volta pública BNB/USDT mainnet + tBNB testnet verificadas |
 | APK release | Assinado, não depurável, SHA-256/certificado e backup da assinatura confirmado |
 | Download e suporte | Serviço Node/Nginx/Turnstile, manifesto aprovado para o beta; [Discord oficial](https://discord.com/invite/ujR9huP7qK) |
-| Avisos e notificações | Pop-ups locais, saídas do outbox e recebimentos diretos BNB/eventos USDT com a Wallet aberta; sem push/background |
+| Avisos e notificações | Convite na primeira home, notificações privadas e recibos de entrada/saída/compra com o app aberto; sem push/background |
 | Cartão físico / maquininha | Leitura Classic 1K, vínculo local cifrado e revisão em laboratório isolado; sem liquidação |
-| Protocolo Caedral/NFC | Protótipo isolado de transporte cifrado e contrato experimental; sem pagamento NFC no beta |
+| Origin e maquininha NFC | Integração de desenvolvimento em BSC testnet: ativação, dados cifrados, regeneração, HCE e split on-chain; RF entre dois celulares pendente, fora do beta publicado |
 
 [Validação do cartão, maquininha e notificações](docs/CARTAO_MAQUININHA_NOTIFICACOES.md) detalha a cobertura, os testes e os limites desta etapa.
 
 ## Desenvolvimento da bandeira Caedral
 
-O [protocolo Caedral v0.1](docs/PROTOCOLO_CAEDRAL.md) inicia as credenciais de cinco anos,
-nome escolhido, política de taxa de 1% com piso de 0,10 do ativo, cashback inicial de 0,1%
-e tabela por cartão em 01/02/2027. Inclui SDK Kotlin interno, laboratório NFC opcional e
-contrato Solidity de liquidação com reserva para cashback. **Não está implantado nem integrado
-ao pagamento da Wallet.** O documento distingue o que foi implementado dos requisitos de
-segurança, financiamento, hardware e integrações ainda pendentes. O beta publicado permanece
-sem esses recursos experimentais.
+A [integração Origin](docs/ORIGIN_INTEGRACAO.md) conecta a área de cartões e a maquininha ao cofre/assinador e ao contrato próprio em BSC testnet. Inclui validade de cinco anos, dados cifrados com revelação autenticada, regeneração, cobrança assinada EIP-712, NFC HCE cifrado e liquidação atômica com cashback. O saldo usado é o da conta vinculada.
+
+A taxa é 1% com piso literal de 0,10 do ativo; cashback Origin inicial de 0,1%, passando a 1% em 01/02/2027. [Deployment verificável](protocol/deployments/97-origin.json). Não existe implantação mainnet do Origin nesta fase. O [rascunho anterior](docs/PROTOCOLO_CAEDRAL.md) preserva a pesquisa de outros níveis, separada desta implementação. O APK público continua sem a nova integração até a validação manual NFC.
 
 ## Tecnologias em uso
 

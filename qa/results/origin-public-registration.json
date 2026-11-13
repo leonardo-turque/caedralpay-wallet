@@ -1,0 +1,10 @@
+{
+  "chainId": 97,
+  "hash": "0x340b611956fe09139131247c76ec2a96c399234013fc7ac37b511eaea32d8e75",
+  "holder": "0x1985DF544b50aFe586CB777eDdcBd239eF13f02B",
+  "cardId": "577c9caddf693fca93cd74d6ddf4142bd25dd13677c3502e2eb64e77db265dde",
+  "expiresAt": 1952305491,
+  "registered": true,
+  "confirmed": true,
+  "purchaseSent": false
+}

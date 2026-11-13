@@ -76,12 +76,15 @@ fun WalletHomeScreen(
     var assetDetails by remember { mutableStateOf<AssetPosition?>(null) }
     var transferFromDetails by remember { mutableStateOf(false) }
     val percent = remember { NumberFormat.getNumberInstance(Locale.forLanguageTag("pt-BR")).apply { minimumFractionDigits = 2; maximumFractionDigits = 2 } }
+    if (enableAccountManagement) NotificationWelcome()
     val account = accounts?.selectedAccount
     val accountKey = "${network.chainId}:" + account?.let { "${accounts?.selectedWalletId}:${it.index}:${it.address}" }
     LaunchedEffect(accountKey, connectToNetwork) {
         if (!connectToNetwork || account == null) return@LaunchedEffect
         val incoming = IncomingActivityWatcher()
         val outgoing = TransactionEngine(context)
+        val origin = OriginEngine(context)
+        val originMerchant = OriginMerchant(context)
         while (true) {
             try {
                 incoming.poll(context, network, account.address)
@@ -92,6 +95,10 @@ fun WalletHomeScreen(
                     .forEach { outgoing.refresh(it) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { /* Keep cursor/outbox and retry; no unverified alerts. */ }
+            if(network==OriginNetwork.chain) try {
+                origin.history().filter{!it.terminal && it.quote.from.equals(account.address,true)}.forEach{origin.refresh(it)}
+                OriginSales(context).all().filter{it.hash==null && !it.expired && it.invoice.request.merchant.equals(account.address,true)}.forEach{originMerchant.poll(it)}
+            } catch(cancelled:CancellationException){throw cancelled} catch(_:Exception){ }
             delay(5_000)
         }
     }
@@ -201,6 +208,10 @@ fun WalletHomeScreen(
         WalletQuickActions(onSend = { transferAsset = if (network.isTestnet) WalletAsset.BNB else WalletAsset.USDT; transferFromDetails = false; sheet = HomeSheet.Send },
             onReceive = { transferAsset = if (network.isTestnet) WalletAsset.BNB else WalletAsset.USDT; transferFromDetails = false; sheet = HomeSheet.Receive },
             modifier = Modifier.padding(top = 32.dp))
+        if (enableAccountManagement) Row(Modifier.fillMaxWidth().padding(top=16.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick={sheet=HomeSheet.Cards},modifier=Modifier.weight(1f)){Text("Cartões")}
+            OutlinedButton(onClick={sheet=HomeSheet.Merchant},modifier=Modifier.weight(1f)){Text("Maquininha")}
+        }
         HorizontalDivider(Modifier.padding(top = 32.dp, bottom = 24.dp), color = C.Divider)
         WalletAssetSection(displayedAssets,
             onAsset = { assetDetails = it; sheet = HomeSheet.AssetDetails },
@@ -212,6 +223,8 @@ fun WalletHomeScreen(
     SnackbarHost(alerts, modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(16.dp))
     }
     when (sheet) {
+        HomeSheet.Cards -> accounts?.let { OriginCardsSheet(it,network,onDismiss={sheet=null}) }
+        HomeSheet.Merchant -> accounts?.let { OriginMerchantSheet(it,network,onDismiss={sheet=null}) }
         HomeSheet.Terminal -> PhysicalTerminalSheet(account, onDismiss = { sheet = null })
         HomeSheet.Notifications -> WalletNotificationSettings(onDismiss = { sheet = null })
         HomeSheet.Nfc -> CaedralNfcSheet(account, network, onDismiss = { sheet = null })
@@ -269,7 +282,7 @@ fun WalletHomeScreen(
     }
 }
 
-private enum class HomeSheet { Accounts, Send, Receive, AssetDetails, Network, Appearance, Activity, Nfc, Notifications, Terminal }
+private enum class HomeSheet { Accounts, Send, Receive, AssetDetails, Network, Appearance, Activity, Nfc, Notifications, Terminal, Cards, Merchant }
 
 @Composable
 private fun WalletQuickActions(onSend: () -> Unit, onReceive: () -> Unit, modifier: Modifier = Modifier) {

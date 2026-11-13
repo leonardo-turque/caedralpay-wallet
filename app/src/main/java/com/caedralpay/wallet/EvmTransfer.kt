@@ -41,6 +41,7 @@ internal data class PreparedTransfer(
 internal class TransferRepository(private val gateway: EvmGateway = EvmGateway()) {
     suspend fun prepare(chain: BscChain, asset: WalletAsset, from: String, recipient: String, amount: String): PreparedTransfer {
         require(TransferDraft.isAddressShapeValid(from) && TransferDraft.isAddressShapeValid(recipient))
+        require(chain!=OriginNetwork.chain || !recipient.equals(OriginNetwork.address,true)) { "Use o cartão para pagar uma cobrança Caedral." }
         val decimal = requireNotNull(TransferDraft.amount(amount)) { "Quantidade inválida." }
         val units = try { decimal.movePointRight(18).toBigIntegerExact() } catch (_: ArithmeticException) {
             throw IllegalArgumentException("Use no máximo 18 casas decimais.")

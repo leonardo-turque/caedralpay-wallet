@@ -1,5 +1,7 @@
 # Validação do protótipo Caedral v0.1
 
+> Registro histórico do protótipo. A integração Origin posterior, incluindo deployment testnet e fluxo real do assinador, está em [ORIGIN_INTEGRACAO.md](ORIGIN_INTEGRACAO.md). Os limites abaixo descrevem aquela etapa anterior.
+
 12/11/2026. Branch `feat/caedral-protocol-nfc`.
 
 ## Executado
