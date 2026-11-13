@@ -47,13 +47,13 @@ A primeira rede integrada é a BNB Smart Chain, em mainnet e testnet, com BNB e 
 | Download e suporte | Serviço Node/Nginx/Turnstile, manifesto aprovado para o beta; [Discord oficial](https://discord.com/invite/ujR9huP7qK) |
 | Avisos e notificações | Convite na primeira home, notificações privadas e recibos de entrada/saída/compra com o app aberto; sem push/background |
 | Cartão físico / maquininha | Leitura Classic 1K, vínculo local cifrado e revisão em laboratório isolado; sem liquidação |
-| Origin e maquininha NFC | Integração de desenvolvimento em BSC testnet: ativação, dados cifrados, regeneração, HCE e split on-chain; RF entre dois celulares pendente, fora do beta publicado |
+| Origin e maquininha NFC | Integração de desenvolvimento em BSC testnet: cartão pronto sem ativação, dados cifrados, regeneração, HCE e split on-chain; RF entre dois celulares pendente, fora do beta publicado |
 
 [Validação do cartão, maquininha e notificações](docs/CARTAO_MAQUININHA_NOTIFICACOES.md) detalha a cobertura, os testes e os limites desta etapa.
 
 ## Desenvolvimento da bandeira Caedral
 
-A [integração Origin](docs/ORIGIN_INTEGRACAO.md) conecta a área de cartões e a maquininha ao cofre/assinador e ao contrato próprio em BSC testnet. Inclui um cartão por conta, com os mesmos dados em todas as redes, validade de cinco anos, dados cifrados com revelação autenticada, regeneração, cobrança assinada EIP-712 e NFC HCE cifrado. Emissão local e ativação por rede são separadas. A compra usa o saldo da conta vinculada e devolve o cashback na mesma moeda e transação, descontando-o da taxa Caedral.
+A [integração Origin](docs/ORIGIN_INTEGRACAO.md) conecta a área de cartões e a maquininha ao cofre/assinador e ao contrato próprio em BSC testnet. Inclui um cartão por conta, com os mesmos dados em todas as redes, validade de cinco anos, dados cifrados com revelação autenticada, regeneração, cobrança assinada EIP-712 e NFC HCE cifrado. Não exige ativação por rede/moeda: o primeiro uso on-chain é incluído na compra. O lojista determina rede, moeda e valor; o cliente abre o cartão com biometria prioritária e usa PIN como alternativa. O pagamento recusa saldo insuficiente, incluindo o teto de gás; cashback não é crédito antecipado. A compra usa o saldo da conta vinculada e devolve o cashback na mesma moeda e transação, descontando-o da taxa Caedral.
 
 A taxa é 1% com piso literal de 0,10 do ativo; cashback Origin inicial de 0,1%, passando a 1% em 01/02/2027. [Deployment verificável](protocol/deployments/97-origin.json). Não existe implantação mainnet do Origin nesta fase. O [rascunho anterior](docs/PROTOCOLO_CAEDRAL.md) preserva a pesquisa de outros níveis, separada desta implementação. O APK público continua sem a nova integração até a validação manual NFC.
 

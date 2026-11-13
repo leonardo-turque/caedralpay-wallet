@@ -1,14 +1,14 @@
 {
   "date": "2026-11-13",
-  "scope": "Universal account card identity and atomic same-asset cashback; published beta unchanged",
+  "scope": "Merchant-selected invoice; biometric-first tap readiness; no manual activation; no overdraft; published beta unchanged",
   "androidUnitTests": {
-    "passed": 60,
+    "passed": 63,
     "failed": 0
   },
   "solidityTests": {
-    "passed": 39,
+    "passed": 44,
     "failed": 0,
-    "origin": 13,
+    "origin": 18,
     "previousProtocol": 26,
     "fuzzRunsPerTest": 256
   },
@@ -17,43 +17,49 @@
     "api": 37,
     "localOriginE2E": {
       "passed": true,
-      "seconds": 27.329,
+      "seconds": 48.517,
       "covers": [
-        "vault signing",
-        "owner-bound card registration",
-        "one-use authorization",
+        "local account card creation with no activation transaction",
+        "first native and token purchase with automatic first use",
+        "wallet vault signing and single-use authorization",
         "metadata AEAD tamper rejection",
         "encrypted chunked APDU software path",
-        "native payment",
-        "exact ERC20 approval and payment",
-        "15-confirmation canonical receipts",
-        "merchant receipt",
-        "merchant terminal state cannot regress",
-        "journal restore",
-        "old card invalidation on regeneration",
-        "payer balance credits cashback minus actual gas",
-        "merchant and treasury exact balance deltas",
-        "same-asset cashback deducted from merchant fee",
-        "outbox destination stable after deployment configuration change"
+        "merchant-defined asset and value",
+        "exact ERC20 approval and allowance reset integrated into one bounded purchase consent",
+        "gas price increase rejected after consent",
+        "finished consent cannot be reused",
+        "wallet lock revokes purchase consent",
+        "native balance disappearing after review blocks signing",
+        "zero token balance blocks approval preparation",
+        "payer merchant treasury exact same-asset cashback balance deltas",
+        "15-confirmation canonical receipts and merchant terminal state",
+        "outbox destination remains fixed across configuration change",
+        "background confirmation and stale modal refresh are idempotent",
+        "regeneration and old previously-used card ID rejection after new purchase"
       ]
     },
-    "originUiTestsPassed": 3,
+    "originUiTestsPassed": 4,
     "previousNfcAndAlertTestsPassed": 12,
     "cardIdentityUi": {
       "sameCardMainnetTestnetAndReopen": true,
       "creationWithoutRpc": true,
       "encryptedMetadataUnchanged": true,
-      "fullDetailsRequirePin": true
+      "fullDetailsRequirePin": true,
+      "homeOpenCloseReopen": true,
+      "manualActivationAbsent": true,
+      "tapActionReadyOnBothNetworkViews": true
     }
   },
   "publicTestnet": {
     "chainId": 97,
     "deploymentProof": "protocol/deployments/97-origin.json",
-    "androidCardRegistrationHash": "0xa948a7a6b21ef955e8ad3a9c68201ec3e8454caeffb67113134be14aa6c831de",
-    "confirmed": true,
+    "readinessProof": "qa/results/origin-public-ready.json",
+    "sameCardIdAndExpiryPreserved": true,
+    "readyWithoutActivation": true,
+    "activationSent": false,
     "purchaseSent": false,
-    "sameIdAndExpiryOnNewDeployment": true,
-    "cardCredentialsRegenerated": false
+    "merchantInvoiceVerified": true,
+    "insufficientFundsBlocked": true
   },
   "distributionTestsPassed": 11,
   "hardware": {

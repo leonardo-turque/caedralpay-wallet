@@ -53,12 +53,16 @@ object WalletVault {
     private class Grant(val token: VaultAuthorization, val session: VaultSession, val action: VaultAction,
         val walletId: String, val accountIndex: Int?, val expiresAt: Long, val binding: String?)
     private var grant: Grant? = null
+    private class OriginConsent(val permit:OriginPaymentPermit,val session:VaultSession,val walletId:String,val index:Int,
+        val draft:OriginPaymentDraft,var next:Int,var gasRemaining:java.math.BigInteger,val deadline:Long)
+    private var originConsent:OriginConsent?=null
 
     private class VaultSession(val key: ByteArray, val snapshot: WalletAccountsSnapshot)
 
     @Synchronized
     fun lock() {
         OriginTapSession.clear()
+        originConsent=null
         grant = null
         session?.key?.fill(0)
         session = null
@@ -381,6 +385,39 @@ object WalletVault {
     }
 
     @Synchronized
+    internal fun beginOriginPayment(walletId:String,index:Int,draft:OriginPaymentDraft,token:VaultAuthorization):OriginPaymentPermit {
+        consume(token,VaultAction.SignOrigin,walletId,index,draft.digest)
+        draft.validate()
+        val current=checkNotNull(session)
+        val account=current.snapshot.wallets.first{it.id==walletId}.accounts.first{it.index==index}
+        require(account.address.equals(draft.first.from,true))
+        val permit=OriginPaymentPermit()
+        originConsent=OriginConsent(permit,current,walletId,index,draft,0,draft.maximumGas,android.os.SystemClock.elapsedRealtime()+90_000)
+        return permit
+    }
+
+    @Synchronized
+    internal fun authorizeOriginPaymentStep(permit:OriginPaymentPermit,q:OriginQuote):VaultAuthorization {
+        val consent=checkNotNull(originConsent){"Confirme a compra novamente."}
+        check(consent.permit===permit && consent.session===session && android.os.SystemClock.elapsedRealtime()<=consent.deadline)
+        q.validate()
+        val first=consent.draft.first
+        require(consent.next<consent.draft.steps.size && q.call.kind==consent.draft.steps[consent.next])
+        require(q.from.equals(first.from,true) && q.call.cardId==first.call.cardId && q.call.expiry==first.call.expiry && q.call.registrationSalt==first.call.registrationSalt &&
+            q.call.settlement.equals(first.call.settlement,true) && q.call.invoice!!.wire().contentEquals(first.call.invoice!!.wire()))
+        require(q.gasPrice<=first.gasPrice && q.fee<=consent.gasRemaining)
+        if(consent.next==0)require(q.digest==first.digest)
+        else require(q.gasLimit<=OriginPaymentDraft.gasCap(q.call.kind))
+        consent.next++;consent.gasRemaining-=q.fee
+        return issueGrant(VaultAction.SignOrigin,consent.walletId,consent.index,q.digest)
+    }
+
+    @Synchronized
+    internal fun cancelOriginPayment(permit:OriginPaymentPermit?=null) {
+        if(permit==null || originConsent?.permit===permit){originConsent=null;grant=null}
+    }
+
+    @Synchronized
     internal fun consumeCardAuthorization(token: VaultAuthorization, action: VaultAction, walletId: String, index: Int, binding: String) {
         require(action in setOf(VaultAction.ViewCard,VaultAction.ArmCard,VaultAction.RegenerateCard))
         consume(token,action,walletId,index,binding)
@@ -394,6 +431,7 @@ object WalletVault {
         if(existing != null) consume(requireNotNull(regeneration),VaultAction.RegenerateCard,walletId,index,existing.fingerprint)
         val account = current.snapshot.wallets.first{it.id==walletId}.accounts.first{it.index==index}
         require(OriginJournal(context).all().none { !it.terminal && it.quote.call.kind==OriginAction.Register && it.quote.from.equals(account.address,true) }) { "Aguarde a ativação anterior." }
+        originConsent=null
         val previous = existing?.let { openOriginDetails(it,current.key) }
         var card = OriginCard.generate(walletId,account,first,last)
         var attempts=0
@@ -405,13 +443,19 @@ object WalletVault {
         val encrypted = try { encrypt(SecretKeySpec(current.key,"AES"),raw,aad) } finally { raw.fill(0) }
         val sealed = android.util.Base64.encodeToString(encrypted.iv+encrypted.ciphertext,android.util.Base64.NO_WRAP)
         return OriginCard(card.walletId,card.index,card.holder,card.id,card.name,"","",card.issuedAt,card.expiresAt,sealed,card.number.takeLast(4),card.salt)
-            .also { OriginCardStore(context,true).save(it) }
+            .also { OriginCardStore(context,true).save(it);OriginCardStore(context).save(it) }
     }
 
     @Synchronized
     internal fun originCardDetails(card: OriginCard, token: VaultAuthorization): OriginCardDetails {
         consume(token,VaultAction.ViewCard,card.walletId,card.index,card.fingerprint)
         return openOriginDetails(card,checkNotNull(session).key)
+    }
+    @Synchronized
+    internal fun authorizeOriginTap(context:Context,card:OriginCard,token:VaultAuthorization) {
+        consume(token,VaultAction.ArmCard,card.walletId,card.index,card.fingerprint)
+        require(OriginCardStore.latest(context,card.walletId,card.index)?.id==card.id && card.expiresAt>java.time.Instant.now().epochSecond){"Este cartão foi substituído ou expirou."}
+        originClear(card,checkNotNull(session).key).fill(0)
     }
     private fun originAad(card:OriginCard)=listOf("CaedralPay/Origin/v1",card.walletId,card.index.toString(),card.id,
         card.holder.lowercase(java.util.Locale.ROOT),card.salt,card.name,card.issuedAt.toString(),card.expiresAt.toString(),card.lastFour).joinToString("|").toByteArray()
@@ -445,7 +489,7 @@ object WalletVault {
         consume(token,VaultAction.SignOrigin,walletId,index,q.digest); q.validate()
         val localCard=requireNotNull(OriginCardStore.latest(context,walletId,index))
         require(localCard.id==q.call.cardId && localCard.holder.equals(q.from,true)) { "Os dados do cartão mudaram. Revise a operação." }
-        if(q.call.kind==OriginAction.Register)require(localCard.expiresAt==q.call.expiry && localCard.salt==q.call.registrationSalt)
+        require(localCard.expiresAt==q.call.expiry && localCard.salt==q.call.registrationSalt)
         originClear(localCard,checkNotNull(session).key).fill(0)
         val key=originKey(context,walletId,index,q.from)
         return try {

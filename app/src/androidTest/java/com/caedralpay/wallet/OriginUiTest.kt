@@ -35,7 +35,7 @@ class OriginUiTest {
         compose.onNodeWithText("Quer receber notificações?").assertDoesNotExist()
         Assert.assertTrue(context.getSharedPreferences("wallet_alerts",Context.MODE_PRIVATE).getBoolean("welcome_asked",false))
     }
-    @Test fun sameCardAndDetailsSurviveNetworkChangesAndReopening() {
+    @Test fun sameCardAndDetailsSurviveNetworkChanges() {
         val suffix=UUID.randomUUID().toString()
         val folder=File(compose.activity.cacheDir,"origin-ui-$suffix").apply{mkdirs()}
         val context=object:ContextWrapper(compose.activity){override fun getFilesDir()=folder
@@ -53,7 +53,9 @@ class OriginUiTest {
             compose.onNodeWithText("Nome no cartão").performTextInput("Ana")
             compose.onNodeWithText("Sobrenome").performTextInput("Silva")
             compose.onNodeWithText("Criar meu Origin").performScrollTo().performClick()
-            compose.waitUntil(15_000){compose.onAllNodesWithText("Ver dados").fetchSemanticsNodes().isNotEmpty()}
+            compose.waitUntil(15_000){compose.waitForIdle();compose.onAllNodesWithText("Ver dados").fetchSemanticsNodes().isNotEmpty()}
+            compose.onNodeWithText("Ativar pagamentos nesta rede").assertDoesNotExist()
+            compose.onNodeWithText("Aproximar para pagar").assertIsEnabled()
             val original=OriginCardStore.latest(context,snapshot.selectedWalletId,0)!!
             val grant=WalletVault.authorizeWithPin(context,"123456".toCharArray(),VaultAction.ViewCard,original.walletId,0,original.fingerprint)
             val originalDetails=WalletVault.originCardDetails(original,grant)
@@ -61,26 +63,45 @@ class OriginUiTest {
                 compose.runOnIdle{network=chain}
                 compose.waitForIdle()
                 compose.waitUntil(25_000){compose.onAllNodesWithText("Ver dados").fetchSemanticsNodes().firstOrNull()?.config?.contains(SemanticsProperties.Disabled)==false}
+                compose.onNodeWithText("Ativar pagamentos nesta rede").assertDoesNotExist()
+                compose.onNodeWithText("Aproximar para pagar").assertIsEnabled()
                 compose.onNodeWithText("••••  "+original.lastFour).assertExists()
                 val reloaded=OriginCardStore.latest(context,snapshot.selectedWalletId,0)!!
                 Assert.assertEquals(original.json().toString(),reloaded.json().toString())
             }
-            compose.onNodeWithContentDescription("Fechar painel").performClick()
-            compose.waitUntil(25_000){!shown}
-            compose.waitUntil(25_000){compose.onAllNodesWithText("Seu cartão Origin").fetchSemanticsNodes().isEmpty()}
-            compose.waitForIdle()
-            compose.runOnIdle{shown=true}
-            compose.waitForIdle()
-            compose.onNodeWithText("Seu cartão Origin").assertExists()
-            compose.waitUntil(25_000){compose.onAllNodesWithText("Ver dados").fetchSemanticsNodes().isNotEmpty()}
             val preview=compose.onNodeWithText("Seu cartão Origin").onParent().captureToImage().asAndroidBitmap()
             File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir,"origin-universal-preview.png").outputStream().use{preview.compress(Bitmap.CompressFormat.PNG,100,it)}
             compose.onNodeWithText("Ver dados").performScrollTo().performClick()
             compose.onNodeWithText("PIN de 6 dígitos").performTextInput("123456")
             compose.onNodeWithText("Confirmar").performClick()
-            compose.waitUntil(15_000){compose.onAllNodesWithText(originalDetails.number.chunked(4).joinToString(" ")).fetchSemanticsNodes().isNotEmpty()}
+            compose.waitUntil(15_000){compose.waitForIdle();compose.onAllNodesWithText(originalDetails.number.chunked(4).joinToString(" ")).fetchSemanticsNodes().isNotEmpty()}
             compose.onNodeWithText(originalDetails.securityCode).assertExists()
         } finally {compose.runOnIdle{shown=false};compose.waitForIdle();WalletVault.lock();folder.deleteRecursively()}
+    }
+    @Test fun homeReopensExistingCardWithoutIssuingAnother() {
+        val suffix=UUID.randomUUID().toString()
+        val folder=File(compose.activity.cacheDir,"origin-home-$suffix").apply{mkdirs()}
+        val context=object:ContextWrapper(compose.activity){override fun getFilesDir()=folder
+            override fun getApplicationContext():Context=this
+            override fun getSharedPreferences(name:String,mode:Int)=super.getSharedPreferences("$suffix-$name",mode)}
+        WalletVault.lock()
+        try {
+            WalletVault.create(context,"Fixture",List(11){"abandon"}+"about","123456".toCharArray())
+            val snapshot=WalletVault.accountsSnapshot()
+            val original=WalletVault.createOriginCard(context,snapshot.selectedWalletId,0,"Ana","Silva")
+            context.getSharedPreferences("wallet_alerts",0).edit().putBoolean("welcome_asked",true).apply()
+            compose.setContent{WalletTheme{CompositionLocalProvider(LocalContext provides context){WalletHomeScreen("Fixture",enableAccountManagement=true,connectToNetwork=false,initialNetwork=BscChain.Mainnet)}}}
+            repeat(2){
+                compose.onNodeWithText("Cartões").performScrollTo().performClick()
+                compose.waitUntil(25_000){compose.waitForIdle();compose.onAllNodesWithText("Ver dados").fetchSemanticsNodes().isNotEmpty()}
+                compose.onNodeWithText("••••  "+original.lastFour).assertExists()
+                compose.onNodeWithText("Aproximar para pagar").assertIsEnabled()
+                Assert.assertEquals(original.json().toString(),OriginCardStore.latest(context,snapshot.selectedWalletId,0)!!.json().toString())
+                compose.onNodeWithContentDescription("Fechar painel").performClick()
+                compose.waitUntil(25_000){compose.onAllNodesWithText("Seu cartão Origin").fetchSemanticsNodes().isEmpty()}
+                compose.waitForIdle()
+            }
+        } finally {WalletVault.lock();folder.deleteRecursively()}
     }
     @Test fun originVisualHasBrandAndMasksNumber() {
         compose.setContent{WalletTheme{Column(Modifier.fillMaxSize().padding(24.dp)){OriginCardVisual("Ana Silva","4527");Spacer(Modifier.height(20.dp));OriginCardVisual("Ana Silva","4527",portrait=true)}}}

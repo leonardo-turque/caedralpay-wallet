@@ -9,8 +9,8 @@ import java.security.MessageDigest
 /** Addresses are release configuration, never supplied by an NFC peer. */
 internal object OriginNetwork {
     const val previousEnrollmentAddress = "0x4231568495F9A11C35d08220B1ECb6cE1d076C6a"
-    private const val deploymentAddress = "0x1c8151E63461F46058E1196E9A321E0e273C9300"
-    private const val deploymentHash = "0xb3661e12669ca3f93752c4646991fc947bf76cd26fffde7ee35ce47e23e268e0"
+    private const val deploymentAddress = "0xcE39322992B56fBA6EF733a69764e7e12fCbF9EB"
+    private const val deploymentHash = "0xef79033d892c6ab398b9d77b2143c2a5284e2d4ea05257eb6bcd76a63757ac0b"
     @Volatile private var testConfig: Pair<String,String>? = null
     val address get() = testConfig?.first ?: deploymentAddress
     val runtimeHash get() = testConfig?.second ?: deploymentHash
@@ -77,11 +77,15 @@ internal object OriginAbi {
     }
     fun register(id: String, salt:String, expiry: Long) = "0x"+selector("registerCard(bytes32,bytes32,uint64)")+id+salt+word(expiry.toBigInteger())
     fun approve(units: BigInteger,settlement:String=OriginNetwork.address) = "0x095ea7b3"+addr(settlement)+word(units)
-    fun pay(invoice: OriginInvoice, cardId: String): String {
+    fun payLegacy(invoice: OriginInvoice, cardId: String): String {
         val signature = invoice.signature.lowercase()
         // Six static tuple slots + dynamic bytes offset + card ID. Tail: bytes length and padding.
         return "0x"+selector("pay((address,address,uint256,bytes32,uint64,uint64),bytes,bytes32)")+invoiceWords(invoice.request)+
             word(256.toBigInteger())+cardId+word(65.toBigInteger())+signature.padEnd(192, '0')
+    }
+    fun pay(invoice:OriginInvoice,cardId:String,salt:String,expiry:Long):String {
+        return "0x"+selector("pay((address,address,uint256,bytes32,uint64,uint64),bytes,bytes32,bytes32,uint64)")+invoiceWords(invoice.request)+
+            word(320.toBigInteger())+cardId+salt+word(expiry.toBigInteger())+word(65.toBigInteger())+invoice.signature.lowercase().padEnd(192,'0')
     }
     fun sha(text: String) = MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).hex()
 }

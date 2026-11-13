@@ -25,4 +25,22 @@ class OriginModelTest {
         assertEquals(2,frames.size);assertEquals(205,frames[0].size);assertEquals(94,frames[1].size)
         assertEquals(0,frames[0][2].toInt());assertEquals(1,frames[1][2].toInt());assertEquals(1,frames[1][3].toInt())
     }
+    @Test fun nativeBalanceMustCoverFullValueAndMaximumGas() {
+        val value=100.toBigInteger();val gas=2.toBigInteger()
+        OriginFunding.requireNative(102.toBigInteger(),value,gas)
+        for(balance in listOf(0,99,100,101)) {
+            try{OriginFunding.requireNative(balance.toBigInteger(),value,gas);fail("Insufficient balance accepted")}
+            catch(_:IllegalArgumentException){}
+        }
+    }
+    @Test fun tokenBalanceCannotUseExpectedCashbackAsCredit() {
+        OriginFunding.requireToken(100.toBigInteger(),100.toBigInteger())
+        for(balance in listOf(0,99)) {
+            try{OriginFunding.requireToken(balance.toBigInteger(),100.toBigInteger());fail("Token overdraft accepted")}
+            catch(_:IllegalArgumentException){}
+        }
+    }
+    @Test(expected=IllegalArgumentException::class) fun negativeBalanceFailsClosed() {
+        OriginFunding.requireNative((-1).toBigInteger(),0.toBigInteger(),1.toBigInteger())
+    }
 }

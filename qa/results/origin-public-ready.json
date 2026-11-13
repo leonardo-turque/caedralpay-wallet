@@ -1,0 +1,12 @@
+{
+  "chainId": 97,
+  "settlement": "0xcE39322992B56fBA6EF733a69764e7e12fCbF9EB",
+  "holder": "0x1985DF544b50aFe586CB777eDdcBd239eF13f02B",
+  "cardId": "577c9caddf693fca93cd74d6ddf4142bd25dd13677c3502e2eb64e77db265dde",
+  "expiresAt": 1952305491,
+  "readyForTap": true,
+  "activationSent": false,
+  "purchaseSent": false,
+  "merchantInvoiceVerified": true,
+  "insufficientFundsBlocked": true
+}

@@ -15,6 +15,7 @@ import java.net.Socket
 import java.util.UUID
 import java.math.BigInteger
 import java.time.Instant
+import wallet.core.jni.Hash as WalletHash
 
 /** Explicit local-chain test, emulator only. No public-chain keys or funds. */
 class OriginIntegrationTest {
@@ -57,10 +58,36 @@ class OriginIntegrationTest {
         local("anvil_mine",listOf("0xf","0x0"))
         return engine.refresh(sent).also{Assert.assertEquals(TransactionStatus.Confirmed,it.status);Assert.assertNull(it.raw)}
     }
-    private suspend fun invoice(asset:WalletAsset):Pair<OriginInvoice,Long> {
-        val draft=OriginMerchant(context,gateway).draft(BscChain.Testnet,merchant.address,asset,"1")
+    private suspend fun invoice(asset:WalletAsset,amount:String="1"):Pair<OriginInvoice,Long> {
+        val draft=OriginMerchant(context,gateway).draft(BscChain.Testnet,merchant.address,asset,amount)
         val token=WalletVault.authorizeWithPin(context,"123456".toCharArray(),VaultAction.SignInvoice,wallet,1,OriginAbi.sha(OriginAbi.invoiceDigest(draft.first).hex()))
         return WalletVault.signOriginInvoice(context,wallet,1,draft.first,token) to draft.second
+    }
+    private suspend fun purchase(card:OriginCard,invoice:OriginInvoice):OriginRecord {
+        val draft=engine.paymentDraft(card,invoice,payer.address)
+        val auth=WalletVault.authorizeWithPin(context,"123456".toCharArray(),VaultAction.SignOrigin,wallet,0,draft.digest)
+        engine.validatePaymentFunds(draft)
+        val permit=WalletVault.beginOriginPayment(wallet,0,draft,auth)
+        var q=draft.first
+        // A purchase consent cannot silently increase its network fee.
+        try {WalletVault.authorizeOriginPaymentStep(permit,q.copy(gasPrice=q.gasPrice+BigInteger.ONE));Assert.fail("Gas price changed after consent")}
+        catch(_:IllegalArgumentException){}
+        var last:OriginRecord?=null
+        for((index,kind) in draft.steps.withIndex()) {
+            if(index>0)q=engine.prepare(OriginCall.forCard(kind,card,invoice),payer.address)
+            val child=WalletVault.authorizeOriginPaymentStep(permit,q)
+            val sent=engine.send(q,wallet,0,child)
+            local("anvil_mine",listOf("0xf","0x0"))
+            // Home may confirm the decoded outbox first; the modal still owns its original object.
+            val background=engine.history().first{it.hash==sent.hash}
+            engine.refresh(background)
+            last=engine.refresh(sent);Assert.assertEquals(TransactionStatus.Confirmed,last.status)
+            Assert.assertEquals(sent.quote.digest,last.quote.digest)
+        }
+        try{WalletVault.authorizeOriginPaymentStep(permit,q);Assert.fail("Reused finished consent")}
+        catch(_:IllegalArgumentException){}
+        WalletVault.cancelOriginPayment(permit)
+        return requireNotNull(last)
     }
     private suspend fun assetBalance(address:String,asset:WalletAsset):BigInteger {
         val hex=if(asset==WalletAsset.BNB)local("eth_getBalance",listOf(address,"latest")) as String
@@ -70,7 +97,7 @@ class OriginIntegrationTest {
     @Test fun nativeAndTokenSettlementCardRegenerationAndMerchantReceipt()=runBlocking {
         val card=WalletVault.createOriginCard(context,wallet,0,"Ana","Silva")
         Assert.assertTrue(card.number.isEmpty());Assert.assertTrue(card.securityCode.isEmpty())
-        submit(OriginCall(OriginAction.Register,card.id,card.expiresAt,registrationSalt=card.salt));Assert.assertTrue(engine.isActive(card))
+        Assert.assertFalse(engine.isActive(card)) // No registration or activation transaction.
         val token=WalletVault.authorizeWithPin(context,"123456".toCharArray(),VaultAction.ViewCard,wallet,0,card.fingerprint)
         val details=WalletVault.originCardDetails(card,token);Assert.assertEquals(16,details.number.length);Assert.assertEquals(6,details.securityCode.length)
         Assert.assertFalse(File(directory,"origin_cards.bin").readText().contains(details.number))
@@ -81,6 +108,23 @@ class OriginIntegrationTest {
         val reveal=WalletVault.authorizeWithPin(context,"123456".toCharArray(),VaultAction.ViewCard,wallet,0,card.fingerprint)
         try { WalletVault.originCardDetails(altered,reveal);Assert.fail("Metadata tampering accepted") }
         catch(_:javax.crypto.AEADBadTagException) {}
+        // A valid review does not reserve money or allow spending after its balance disappears.
+        val unpaid=invoice(WalletAsset.BNB).first
+        val review=engine.prepare(OriginCall.forCard(OriginAction.Pay,card,unpaid),payer.address)
+        val sign=WalletVault.authorizeWithPin(context,"123456".toCharArray(),VaultAction.SignOrigin,wallet,0,review.digest)
+        val funds=local("eth_getBalance",listOf(payer.address,"pending")) as String
+        local("anvil_setBalance",listOf(payer.address,"0x0"))
+        try {engine.send(review,wallet,0,sign);Assert.fail("Spent with no gas/purchase balance")}
+        catch(e:IllegalArgumentException){Assert.assertTrue(e.message.orEmpty().contains("Saldo"))}
+        finally{local("anvil_setBalance",listOf(payer.address,funds))}
+        Assert.assertTrue(engine.history().isEmpty());Assert.assertFalse(engine.isActive(card))
+        // No token activation/approval is sent when the chosen token has no funds.
+        val slot="0x"+WalletHash.keccak256((OriginAbi.addr(payer.address)+"0".repeat(64)).hexBytes()).hex()
+        val storage=local("eth_getStorageAt",listOf(OriginNetwork.chain.usdtContract!!,slot,"latest")) as String
+        local("anvil_setStorageAt",listOf(OriginNetwork.chain.usdtContract!!,slot,"0x"+"0".repeat(64)))
+        try {engine.prepare(OriginCall.forCard(OriginAction.Approve,card,invoice(WalletAsset.USDT).first),payer.address);Assert.fail("Prepared with no token balance")}
+        catch(e:IllegalArgumentException){Assert.assertTrue(e.message.orEmpty().contains("Saldo"))}
+        finally{local("anvil_setStorageAt",listOf(OriginNetwork.chain.usdtContract!!,slot,storage))}
         for(asset in listOf(WalletAsset.BNB,WalletAsset.USDT)) {
             val (invoice,first)=invoice(asset);invoice.validate()
             // Same signed binary and encrypted/chunked APDU path used by the two real phones.
@@ -94,12 +138,11 @@ class OriginIntegrationTest {
             Assert.assertEquals(invoice.request.id,OriginTapSession.request.value!!.invoice.request.id)
             Assert.assertFalse(service.processCommandApdu(OriginApdu.chunks(sealed).last(),null).contentEquals(OriginApdu.ok))
             val merchantEngine=OriginMerchant(context,gateway);val sale=merchantEngine.save(invoice,first)
-            if(asset==WalletAsset.USDT)submit(OriginCall(OriginAction.Approve,card.id,invoice=invoice))
             val treasury="0x"+(local("eth_call",listOf(mapOf("to" to OriginNetwork.address,"data" to "0x"+OriginAbi.selector("treasury()")),"latest")) as String).takeLast(40)
             val beforePayer=assetBalance(payer.address,asset)
             val beforeMerchant=assetBalance(merchant.address,asset)
             val beforeTreasury=assetBalance(treasury,asset)
-            val paid=submit(OriginCall(OriginAction.Pay,card.id,invoice=invoice))
+            val paid=purchase(card,invoice)
             val receipt=local("eth_getTransactionReceipt",listOf(paid.hash)) as JSONObject
             val block=local("eth_getBlockByNumber",listOf(receipt.getString("blockNumber"),false)) as JSONObject
             val split=CaedralProtocol.split(invoice.request.gross,18,CaedralProtocol.Tier.Origin,Instant.ofEpochSecond(EvmBalanceCodec.quantity(block.getString("timestamp")).longValueExact()))
@@ -116,6 +159,11 @@ class OriginIntegrationTest {
             Assert.assertEquals(paid.quote.call.data,transaction.getString("input"))
             Assert.assertEquals(paid.hash,OriginEngine(context,gateway).history().last().hash)
         }
+        val priorAllowance=invoice(WalletAsset.USDT).first
+        submit(OriginCall.forCard(OriginAction.Approve,card,priorAllowance))
+        val resetInvoice=invoice(WalletAsset.USDT,"2").first
+        Assert.assertEquals(listOf(OriginAction.ResetApproval,OriginAction.Approve,OriginAction.Pay),engine.paymentDraft(card,resetInvoice,payer.address).steps)
+        purchase(card,resetInvoice)
         val saved=engine.history().first()
         val configured=OriginNetwork.address to OriginNetwork.runtimeHash
         try {
@@ -126,10 +174,18 @@ class OriginIntegrationTest {
         } finally { OriginNetwork.configureForTest(configured) }
         val regenerate=WalletVault.authorizeWithPin(context,"123456".toCharArray(),VaultAction.RegenerateCard,wallet,0,card.fingerprint)
         val next=WalletVault.createOriginCard(context,wallet,0,"Ana","Costa",regenerate)
-        Assert.assertNotEquals(next.id,card.id);submit(OriginCall(OriginAction.Register,next.id,next.expiresAt,registrationSalt=next.salt))
+        Assert.assertNotEquals(next.id,card.id)
+        Assert.assertEquals(next.id,OriginCardStore.latest(context,wallet,0)!!.id)
+        purchase(next,invoice(WalletAsset.BNB).first)
         Assert.assertFalse(engine.isActive(card));Assert.assertTrue(engine.isActive(next))
         val replay=invoice(WalletAsset.BNB).first
-        try{engine.prepare(OriginCall(OriginAction.Pay,card.id,invoice=replay),payer.address);Assert.fail("Revoked card accepted")}
+        try{engine.prepare(OriginCall.forCard(OriginAction.Pay,card,replay),payer.address);Assert.fail("Revoked card accepted")}
         catch(_:IllegalArgumentException){}
+        val lockedDraft=engine.paymentDraft(next,invoice(WalletAsset.BNB).first,payer.address)
+        val lockedAuth=WalletVault.authorizeWithPin(context,"123456".toCharArray(),VaultAction.SignOrigin,wallet,0,lockedDraft.digest)
+        val lockedPermit=WalletVault.beginOriginPayment(wallet,0,lockedDraft,lockedAuth)
+        WalletVault.lock();WalletVault.unlockWithPin(context,"123456".toCharArray())
+        try{WalletVault.authorizeOriginPaymentStep(lockedPermit,lockedDraft.first);Assert.fail("Consent survived wallet lock")}
+        catch(_:IllegalStateException){}
     }
 }

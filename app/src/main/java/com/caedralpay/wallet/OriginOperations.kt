@@ -12,7 +12,7 @@ import java.util.UUID
 
 internal object WalletOperationGate { val mutex = Mutex() }
 internal enum class OriginAction { Register, ResetApproval, Approve, Pay }
-internal data class OriginCall(val kind: OriginAction, val cardId: String, val expiry: Long = 0, val invoice: OriginInvoice? = null, val registrationSalt:String="",val settlement:String=OriginNetwork.address) {
+internal data class OriginCall(val kind: OriginAction, val cardId: String, val expiry: Long = 0, val invoice: OriginInvoice? = null, val registrationSalt:String="",val settlement:String=OriginNetwork.address,val automaticCard:Boolean=true) {
     val token get() = invoice?.request?.token ?: CaedralProtocol.ZERO_ADDRESS
     val to get() = if(kind==OriginAction.Approve || kind==OriginAction.ResetApproval) requireNotNull(OriginNetwork.chain.usdtContract) else settlement
     val value get() = if(kind==OriginAction.Pay && token==CaedralProtocol.ZERO_ADDRESS) requireNotNull(invoice).request.gross else BigInteger.ZERO
@@ -20,35 +20,39 @@ internal data class OriginCall(val kind: OriginAction, val cardId: String, val e
         OriginAction.Register -> OriginAbi.register(cardId,registrationSalt,expiry)
         OriginAction.ResetApproval -> OriginAbi.approve(BigInteger.ZERO,settlement)
         OriginAction.Approve -> OriginAbi.approve(requireNotNull(invoice).request.gross,settlement)
-        OriginAction.Pay -> OriginAbi.pay(requireNotNull(invoice),cardId)
+        OriginAction.Pay -> if(automaticCard)OriginAbi.pay(requireNotNull(invoice),cardId,registrationSalt,expiry)else OriginAbi.payLegacy(requireNotNull(invoice),cardId)
     }
     fun validate() {
         require(cardId.matches(Regex("[0-9a-f]{64}")) && cardId != "0".repeat(64)); OriginNetwork.requireAvailable(OriginNetwork.chain)
         require(settlement.equals(OriginNetwork.address,true))
         if(invoice!=null)require(invoice.request.settlement.equals(settlement,true))
-        if(kind==OriginAction.Register) require(expiry>Instant.now().epochSecond && registrationSalt.matches(Regex("[0-9a-f]{64}")))
-        else { requireNotNull(invoice).validate(); if(kind==OriginAction.Approve || kind==OriginAction.ResetApproval) require(token!=CaedralProtocol.ZERO_ADDRESS) }
+        require(kind!=OriginAction.Register && automaticCard) { "Esta operação pertence à versão anterior do cartão." }
+        require(expiry>Instant.now().epochSecond && registrationSalt.matches(Regex("[0-9a-f]{64}"))) { "Cartão expirado ou inválido." }
+        requireNotNull(invoice).validate()
+        if(kind==OriginAction.Approve || kind==OriginAction.ResetApproval)require(token!=CaedralProtocol.ZERO_ADDRESS)
     }
-    fun json() = JSONObject().put("kind",kind.name).put("card",cardId).put("expiry",expiry).put("salt",registrationSalt).put("settlement",settlement).put("wire",invoice?.wire()?.hex() ?: JSONObject.NULL)
+    fun json() = JSONObject().put("kind",kind.name).put("card",cardId).put("expiry",expiry).put("salt",registrationSalt).put("settlement",settlement).put("automatic",automaticCard).put("wire",invoice?.wire()?.hex() ?: JSONObject.NULL)
     companion object {
+        fun forCard(kind:OriginAction,card:OriginCard,invoice:OriginInvoice)=OriginCall(kind,card.id,card.expiresAt,invoice,card.salt,invoice.request.settlement)
         fun decode(o:JSONObject): OriginCall {
             val wire=if(o.isNull("wire"))null else o.getString("wire").hexBytes()
             // Historical invoices are decoded without freshness checks; freshness is mandatory before signing.
             val invoice=wire?.let { val base=it.copyOfRange(0,CaedralProtocol.WIRE_SIZE)
                 val issued=java.nio.ByteBuffer.wrap(base.copyOfRange(136,144)).long
                 OriginInvoice(CaedralProtocol.decode(base,issued),it.copyOfRange(CaedralProtocol.WIRE_SIZE,it.size).hex()) }
-            return OriginCall(OriginAction.valueOf(o.getString("kind")),o.getString("card"),o.getLong("expiry"),invoice,o.optString("salt",""),o.optString("settlement",invoice?.request?.settlement ?: OriginNetwork.previousEnrollmentAddress))
+            return OriginCall(OriginAction.valueOf(o.getString("kind")),o.getString("card"),o.getLong("expiry"),invoice,o.optString("salt",""),o.optString("settlement",invoice?.request?.settlement ?: OriginNetwork.previousEnrollmentAddress),o.optBoolean("automatic",false))
         }
     }
 }
 internal data class OriginQuote(val call: OriginCall,val from: String,val nonce: BigInteger,val gasPrice: BigInteger,val gasLimit: BigInteger,
     val created: Long=System.currentTimeMillis(),val id:String=UUID.randomUUID().toString()) {
-    val digest get()=OriginAbi.sha(listOf(id,from.lowercase(),call.to.lowercase(),call.data,call.value,nonce,gasPrice,gasLimit,created).joinToString("|"))
+    val digest get()=OriginAbi.sha((listOf(id,from.lowercase(),call.to.lowercase(),call.data,call.value,nonce,gasPrice,gasLimit,created)+
+        if(call.automaticCard)listOf(call.cardId,call.expiry,call.registrationSalt)else emptyList()).joinToString("|"))
     val fee get()=gasPrice*gasLimit
     fun rpc()=mapOf("from" to from,"to" to call.to,"value" to call.value.rpcHex(),"data" to call.data)
     fun validate() {
         call.validate()
-        if(call.kind==OriginAction.Register)require(java.security.MessageDigest.getInstance("SHA-256").digest("CaedralOriginCardId/v1".toByteArray()+from.hexBytes()+call.registrationSalt.hexBytes()).hex()==call.cardId)
+        if(call.automaticCard)require(java.security.MessageDigest.getInstance("SHA-256").digest("CaedralOriginCardId/v1".toByteArray()+from.hexBytes()+call.registrationSalt.hexBytes()).hex()==call.cardId)
         require(TransferDraft.isAddressShapeValid(from) && nonce.signum()>=0 && nonce.bitLength()<=64)
         require(gasPrice>BigInteger.ZERO && gasPrice<=BigInteger.TEN.pow(12) && gasLimit in 21000.toBigInteger()..2000000.toBigInteger())
         require(System.currentTimeMillis() in created..created+90000) { "A revisão expirou. Atualize as taxas." }
@@ -71,7 +75,12 @@ internal class OriginJournal(context:Context) {
     fun put(record:OriginRecord) = synchronized(lock) {
         require(record.hash.matches(Regex("0x[0-9a-f]{64}")))
         val rows=all().toMutableList(); val index=rows.indexOfFirst { it.hash==record.hash }
-        if(index>=0) { check(rows[index].quote.digest==record.quote.digest); check(!rows[index].terminal || rows[index]==record); rows[index]=record }
+        if(index>=0) {
+            val previous=rows[index]
+            check(previous.quote.digest==record.quote.digest)
+            if(previous.terminal){check(previous.status==record.status && record.raw==null);return@synchronized}
+            rows[index]=record
+        }
         else {
             check(rows.none { !it.terminal && it.quote.from.equals(record.quote.from,true) })
             while(rows.size>=16) { val oldest=rows.indexOfFirst{it.terminal}; check(oldest>=0); rows.removeAt(oldest) }; rows+=record
@@ -85,27 +94,51 @@ internal class OriginJournal(context:Context) {
 internal class OriginEngine(private val context:Context,private val gateway:EvmGateway=EvmGateway()) {
     private val journal=OriginJournal(context)
     suspend fun prepare(call:OriginCall,from:String):OriginQuote = gateway.read(OriginNetwork.chain) { rpc ->
-        call.validate(); OriginNetwork.verify(rpc)
-        if(call.kind!=OriginAction.Register) {
-            val state=cardState(rpc,from)
-            require(state.first==call.cardId && state.second>Instant.now().epochSecond) { "Ative ou atualize este cartão antes de pagar." }
-            require(!call.invoice!!.request.merchant.equals(from,true)) { "Escolha uma conta de lojista diferente." }
+        call.validate()
+        withContext(Dispatchers.IO) {
+            val card=OriginCardStore(context,true).findById(call.cardId) ?: OriginCardStore(context).findById(call.cardId)
+            require(card!=null && card.holder.equals(from,true) && card.salt==call.registrationSalt && card.expiresAt==call.expiry &&
+                OriginCardStore.latest(context,card.walletId,card.index)?.id==call.cardId){"Este cartão foi substituído ou expirou."}
         }
+        OriginNetwork.verify(rpc)
+        require(!call.invoice!!.request.merchant.equals(from,true)) { "Escolha uma conta de lojista diferente." }
         require(rpc.quantity("eth_getBalance",from,"pending")>call.value) { "Saldo de tBNB insuficiente para o valor e a taxa de rede." }
         verifyTokens(rpc,call,from)
         val nonce=rpc.quantity("eth_getTransactionCount",from,"pending")
         val price=(rpc.quantity("eth_gasPrice")*110.toBigInteger()+99.toBigInteger())/100.toBigInteger()
         val draft=OriginQuote(call,from,nonce,price,21000.toBigInteger())
         val gas=(rpc.quantity("eth_estimateGas",draft.rpc())*120.toBigInteger()+99.toBigInteger())/100.toBigInteger()
-        draft.copy(gasLimit=gas).also { q -> q.validate(); require(rpc.quantity("eth_getBalance",from,"pending")>=q.call.value+q.fee) { "Saldo insuficiente para o valor e a taxa de rede." } }
+        draft.copy(gasLimit=gas).also { q -> q.validate(); OriginFunding.requireNative(rpc.quantity("eth_getBalance",from,"pending"),q.call.value,q.fee) }
+    }
+    suspend fun paymentDraft(card:OriginCard,invoice:OriginInvoice,from:String):OriginPaymentDraft {
+        invoice.validate()
+        val allowance=if(invoice.request.token==CaedralProtocol.ZERO_ADDRESS)invoice.request.gross else allowance(from)
+        val steps=when {
+            allowance>=invoice.request.gross->listOf(OriginAction.Pay)
+            allowance.signum()==0->listOf(OriginAction.Approve,OriginAction.Pay)
+            else->listOf(OriginAction.ResetApproval,OriginAction.Approve,OriginAction.Pay)
+        }
+        val first=prepare(OriginCall.forCard(steps.first(),card,invoice),from)
+        val plan=OriginPaymentDraft(first,steps).also{it.validate()}
+        validatePaymentFunds(plan)
+        return plan
+    }
+    suspend fun validatePaymentFunds(plan:OriginPaymentDraft) {
+        plan.validate()
+        gateway.read(OriginNetwork.chain){rpc->
+            OriginNetwork.verify(rpc);verifyTokens(rpc,plan.first.call,plan.first.from)
+            val invoice=plan.first.call.invoice!!
+            OriginFunding.requireNative(rpc.quantity("eth_getBalance",plan.first.from,"pending"),
+                if(invoice.request.token==CaedralProtocol.ZERO_ADDRESS)invoice.request.gross else BigInteger.ZERO,plan.maximumGas)
+        }
     }
     suspend fun isActive(card:OriginCard):Boolean = gateway.read(OriginNetwork.chain) { rpc ->
         OriginNetwork.verify(rpc); val state=cardState(rpc,card.holder); state.first==card.id && state.second>Instant.now().epochSecond
     }
     private suspend fun verifyTokens(rpc:EvmConnection,call:OriginCall,from:String) {
-        if(call.kind!=OriginAction.Register && call.token!=CaedralProtocol.ZERO_ADDRESS) {
+        if(call.token!=CaedralProtocol.ZERO_ADDRESS) {
             val balance=EvmBalanceCodec.abiUint(rpc.hex("eth_call",mapOf("to" to requireNotNull(OriginNetwork.chain.usdtContract),"data" to EvmBalanceCodec.balanceOfData(from)),"pending"))
-            require(balance>=call.invoice!!.request.gross){"Saldo de USDT insuficiente para esta compra."}
+            OriginFunding.requireToken(balance,call.invoice!!.request.gross)
         }
     }
     private suspend fun cardState(rpc:EvmConnection,holder:String):Pair<String,Long> {
@@ -122,8 +155,8 @@ internal class OriginEngine(private val context:Context,private val gateway:EvmG
         gateway.read(OriginNetwork.chain) { rpc ->
             OriginNetwork.verify(rpc); verifyTokens(rpc,q.call,q.from)
             require(rpc.quantity("eth_getTransactionCount",q.from,"pending")==q.nonce)
+            OriginFunding.requireNative(rpc.quantity("eth_getBalance",q.from,"pending"),q.call.value,q.fee)
             require(rpc.quantity("eth_gasPrice")<=q.gasPrice && rpc.quantity("eth_estimateGas",q.rpc())<=q.gasLimit)
-            require(rpc.quantity("eth_getBalance",q.from,"pending")>=q.call.value+q.fee)
         }
         withContext(NonCancellable+Dispatchers.IO) {
             val signed=WalletVault.signOriginOperation(context,walletId,index,q,token)
@@ -140,7 +173,9 @@ internal class OriginEngine(private val context:Context,private val gateway:EvmG
         } catch(cancelled:CancellationException){throw cancelled} catch(_:Exception){r}
     }
     suspend fun refresh(r:OriginRecord):OriginRecord {
-        if(r.terminal)return r
+        val saved=withContext(Dispatchers.IO){journal.all().firstOrNull{it.hash==r.hash}} ?: error("Operação não registrada.")
+        require(saved.quote.digest==r.quote.digest)
+        if(saved.terminal)return saved
         return gateway.read(OriginNetwork.chain) { rpc ->
             val receipt=rpc.call("eth_getTransactionReceipt",r.hash) as? JSONObject ?: return@read r
             check(receipt.getString("transactionHash").equals(r.hash,true) && receipt.getString("from").equals(r.quote.from,true) && receipt.getString("to").equals(r.quote.call.to,true))
@@ -185,5 +220,17 @@ internal object OriginReceipt {
                 }
             }
         }) { "O recibo não comprova a operação Caedral." }
+    }
+}
+
+/** Never offsets a debit with future cashback. Uses pending on-chain balances. */
+internal object OriginFunding {
+    fun requireNative(balance:BigInteger,value:BigInteger,gas:BigInteger) {
+        require(balance.signum()>=0 && value.signum()>=0 && gas.signum()>0)
+        require(balance>=value+gas){"Saldo insuficiente para o valor e a taxa de rede."}
+    }
+    fun requireToken(balance:BigInteger,gross:BigInteger) {
+        require(balance.signum()>=0 && gross.signum()>0)
+        require(balance>=gross){"Saldo da moeda da compra insuficiente."}
     }
 }
