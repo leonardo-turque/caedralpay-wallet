@@ -49,7 +49,7 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
     fun stopTap(){OriginTapSession.clear();tapping=false;runCatching{NfcAdapter.getDefaultAdapter(activity)?.let{CardEmulation.getInstance(it).unsetPreferredService(activity)}}}
     suspend fun reload() {
         val saved=withContext(Dispatchers.IO){OriginCardStore.latest(context,wallet,account.index)};card=saved
-        active=if(saved!=null && network==OriginNetwork.chain)runCatching{engine.isActive(saved)}.getOrDefault(false)else false
+        active=if(saved!=null && network==OriginNetwork.chain)try{engine.isActive(saved)}catch(c:CancellationException){throw c}catch(_:Exception){false}else false
         operation=if(network==OriginNetwork.chain)withContext(Dispatchers.IO){engine.history().lastOrNull{!it.terminal && it.quote.from.equals(account.address,true)}}else null
     }
     fun prepare(call:OriginCall){loading=true;error=null;scope.launch{
@@ -75,7 +75,7 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
                         OriginTapSession.arm(current);tapping=true;received=null;operation=null
                     }
     }
-    LaunchedEffect(wallet,account.index,network){loading=true;active=false;auth=null;error=null;try{stopTap();details=null;quote=null;reload();form=card==null}catch(e:Exception){fail(e)}finally{loading=false}}
+    LaunchedEffect(wallet,account.index,network){loading=true;active=false;auth=null;error=null;try{stopTap();details=null;quote=null;reload();form=card==null}catch(c:CancellationException){throw c}catch(e:Exception){fail(e)}finally{loading=false}}
     LaunchedEffect(incoming){val request=incoming ?: return@LaunchedEffect
         stopTap();loading=true
         try{prepareReceived(request.invoice,request.card)}catch(c:CancellationException){throw c}catch(e:Exception){fail(e)}finally{loading=false}

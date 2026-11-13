@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.*
@@ -18,6 +19,11 @@ import java.util.UUID
 import org.junit.*
 class OriginUiTest {
     @get:Rule val compose=createAndroidComposeRule<ComponentActivity>()
+    @Before fun keepDeviceUnlockedDuringVaultChecks() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            compose.activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
     @Test fun notificationChoiceIsNotRepeatedAfterDecline() {
         val suffix=UUID.randomUUID().toString()
         val context=object:ContextWrapper(compose.activity){override fun getSharedPreferences(name:String,mode:Int)=super.getSharedPreferences("$suffix-$name",mode)}
@@ -42,8 +48,8 @@ class OriginUiTest {
             var network by mutableStateOf(BscChain.Mainnet)
             // Network unavailable: loading/failure must never create or replace credentials.
             val offline=EvmGateway(EvmTransport{_,method,_->if(method=="eth_chainId")"0x61" else throw java.io.IOException("Offline fixture")})
-            compose.setContent{WalletTheme{CompositionLocalProvider(LocalContext provides context){if(shown)OriginCardsSheet(snapshot,network,onDismiss={},gateway=offline)}}}
-            compose.waitUntil(10_000){compose.onAllNodesWithText("Nome no cartão").fetchSemanticsNodes().isNotEmpty()}
+            compose.setContent{WalletTheme{CompositionLocalProvider(LocalContext provides context){if(shown)OriginCardsSheet(snapshot,network,onDismiss={shown=false},gateway=offline)}}}
+            compose.waitUntil(25_000){compose.onAllNodesWithText("Nome no cartão").fetchSemanticsNodes().isNotEmpty()}
             compose.onNodeWithText("Nome no cartão").performTextInput("Ana")
             compose.onNodeWithText("Sobrenome").performTextInput("Silva")
             compose.onNodeWithText("Criar meu Origin").performScrollTo().performClick()
@@ -54,13 +60,19 @@ class OriginUiTest {
             for(chain in listOf(BscChain.Testnet,BscChain.Mainnet)) {
                 compose.runOnIdle{network=chain}
                 compose.waitForIdle()
+                compose.waitUntil(25_000){compose.onAllNodesWithText("Ver dados").fetchSemanticsNodes().firstOrNull()?.config?.contains(SemanticsProperties.Disabled)==false}
                 compose.onNodeWithText("••••  "+original.lastFour).assertExists()
                 val reloaded=OriginCardStore.latest(context,snapshot.selectedWalletId,0)!!
                 Assert.assertEquals(original.json().toString(),reloaded.json().toString())
             }
-            compose.runOnIdle{shown=false};compose.waitForIdle();compose.mainClock.advanceTimeBy(1000);compose.runOnIdle{shown=true}
+            compose.onNodeWithContentDescription("Fechar painel").performClick()
+            compose.waitUntil(25_000){!shown}
+            compose.waitUntil(25_000){compose.onAllNodesWithText("Seu cartão Origin").fetchSemanticsNodes().isEmpty()}
             compose.waitForIdle()
-            compose.waitUntil(10_000){compose.onAllNodesWithText("Ver dados").fetchSemanticsNodes().isNotEmpty()}
+            compose.runOnIdle{shown=true}
+            compose.waitForIdle()
+            compose.onNodeWithText("Seu cartão Origin").assertExists()
+            compose.waitUntil(25_000){compose.onAllNodesWithText("Ver dados").fetchSemanticsNodes().isNotEmpty()}
             val preview=compose.onNodeWithText("Seu cartão Origin").onParent().captureToImage().asAndroidBitmap()
             File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir,"origin-universal-preview.png").outputStream().use{preview.compress(Bitmap.CompressFormat.PNG,100,it)}
             compose.onNodeWithText("Ver dados").performScrollTo().performClick()
