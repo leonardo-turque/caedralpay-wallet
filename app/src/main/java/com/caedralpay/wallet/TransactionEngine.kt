@@ -16,6 +16,7 @@ internal class TransactionEngine(context: Context, private val gateway: EvmGatew
 
     suspend fun send(quote: PreparedTransfer, walletId: String, accountIndex: Int, token: VaultAuthorization): WalletTransaction = submission.withLock {
         require(OriginJournal(context).all().none { !it.terminal && quote.chain==OriginNetwork.chain && it.quote.from.equals(quote.from,true) }) { "Há uma operação do cartão em acompanhamento." }
+        require(RecurringJournal(context).all().none{!it.terminal && quote.chain==OriginNetwork.chain && it.quote.from.equals(quote.from,true)}){"Há uma autorização em andamento."}
         // Once signing starts, cancellation must not lose the durable signed envelope.
         repository.validateCurrent(quote)
         withContext(NonCancellable + Dispatchers.IO) {

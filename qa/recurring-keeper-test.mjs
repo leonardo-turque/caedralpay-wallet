@@ -1,0 +1,40 @@
+// Public Anvil fixture only. Starts through run-origin-tests.py, never a public RPC.
+import {ethers} from '../protocol/keeper/node_modules/ethers/lib.esm/index.js';
+import {tick} from '../protocol/keeper/keeper.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+const provider=new ethers.JsonRpcProvider('http://127.0.0.1:18797',undefined,{cacheTimeout:-1});
+const directory=fs.mkdtempSync(path.join(os.tmpdir(),'keeper-fixture-'));
+try {
+ if(await provider.send('eth_chainId',[])!=='0x61')throw Error('Wrong local fixture');
+ const config=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+ const artifact=JSON.parse(fs.readFileSync(new URL('../protocol/out/CaedralRecurringPayments.sol/CaedralRecurringPayments.json',import.meta.url)));
+ const phrase=Array(11).fill('abandon').concat('about').join(' ');
+ const payer=ethers.HDNodeWallet.fromPhrase(phrase,undefined,"m/44'/60'/0'/0/0").connect(provider);
+ const merchant=ethers.HDNodeWallet.fromPhrase(phrase,undefined,"m/44'/60'/0'/0/1");
+ const operator=ethers.HDNodeWallet.fromPhrase('test test test test test test test test test test test junk',undefined,"m/44'/60'/0'/0/0");
+ const settlement=new ethers.Contract(config.recurring.address,artifact.abi,payer);
+ const now=(await provider.getBlock('latest')).timestamp;
+ const offer={merchant:merchant.address,token:ethers.ZeroAddress,gross:ethers.parseEther('1'),id:ethers.hexlify(ethers.randomBytes(32)),intervalDays:1,endAt:0,issuedAt:now,expiresAt:now+120};
+ const fields=['merchant:address','token:address','gross:uint256','id:bytes32','intervalDays:uint64','endAt:uint64','issuedAt:uint64','expiresAt:uint64'].map(v=>{const[name,type]=v.split(':');return{name,type}});
+ const signature=await merchant.signTypedData({name:'CaedralRecurring',version:'1',chainId:97,verifyingContract:config.recurring.address},{Offer:fields},offer);
+ const salt=ethers.hexlify(ethers.randomBytes(32));const card=ethers.sha256(ethers.concat([ethers.toUtf8Bytes('CaedralOriginCardId/v1'),payer.address,salt]));
+ const nonce=await provider.getTransactionCount(payer.address,'pending');
+ const authorization=await payer.authorize({address:config.recurring.account,chainId:97,nonce:nonce+1});
+ const transaction=await settlement.authorize(offer,signature,card,salt,now+86400*365,{type:4,authorizationList:[authorization],nonce,gasLimit:1000000});
+ await transaction.wait();await provider.send('anvil_mine',['0xf','0x0']);
+ const id=await settlement.subscriptionId(payer.address,merchant.address,offer.id);
+ const keeperConfig={chainId:97,rpc:'http://127.0.0.1:18797',settlement:config.recurring.address,runtimeHash:config.recurring.hash,startBlock:(await transaction.wait()).blockNumber,budgetWei:ethers.parseEther('0.01').toString(),operatorKey:operator.privateKey};
+ const state=path.join(directory,'state.json');
+ await provider.send('evm_increaseTime',[86401]);await provider.send('evm_mine',[]);
+ const before=await provider.getBalance(merchant.address);
+ const result=await tick(keeperConfig,state);if(!result.submitted)throw Error('Keeper did not submit due payment');
+ await provider.send('anvil_mine',['0xf','0x0']);await tick(keeperConfig,state);
+ if(await provider.getBalance(merchant.address)-before!==ethers.parseEther('0.9'))throw Error('Wrong merchant settlement');
+ if((await settlement.subscriptions(id)).lastPeriod!==1n)throw Error('Wrong period');
+ if((await tick(keeperConfig,state)).submitted)throw Error('Duplicate period submitted');
+ await provider.send('anvil_setBalance',[payer.address,'0x0']);await provider.send('evm_increaseTime',[86401]);await provider.send('evm_mine',[]);
+ if((await tick(keeperConfig,state)).submitted)throw Error('Attempted underfunded debit');
+ console.log('Keeper E2E passed: independent gas payer, due debit, split, finality, duplicate and insufficient-funds guards.');
+}finally{provider.destroy();fs.rmSync(directory,{recursive:true,force:true});}

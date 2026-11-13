@@ -505,6 +505,42 @@ object WalletVault {
             val raw=result.encoded.toByteArray(); "0x"+wallet.core.jni.Hash.keccak256(raw).hex() to "0x"+raw.hex()
         } finally { key.fill(0) }
     }
+    @Synchronized
+    internal fun signRecurringOffer(context:Context,walletId:String,index:Int,offer:RecurringOffer,token:VaultAuthorization):RecurringOffer {
+        offer.validate(signed=false)
+        consume(token,VaultAction.SignInvoice,walletId,index,OriginAbi.sha(offer.digest().hex()))
+        val key=originKey(context,walletId,index,offer.merchant)
+        return try{offer.copy(signature=wallet.core.jni.EthereumMessageSigner.signTypedMessage(wallet.core.jni.PrivateKey(key),offer.typed()).removePrefix("0x")).also{it.validate()}}finally{key.fill(0)}
+    }
+
+    @Synchronized
+    internal fun signRecurring(context:Context,walletId:String,index:Int,q:RecurringQuote,token:VaultAuthorization):Pair<String,String> {
+        consume(token,VaultAction.SignOrigin,walletId,index,q.digest);q.validate()
+        if(q.action==RecurringAction.Authorize){val card=checkNotNull(OriginCardStore.latest(context,walletId,index));require(card.id==q.cardId && card.salt==q.salt && card.expiresAt==q.cardExpiry && card.holder.equals(q.from,true));originClear(card,checkNotNull(session).key).fill(0)}
+        val key=originKey(context,walletId,index,q.from)
+        return try {
+            fun bytes(value:java.math.BigInteger)=com.google.protobuf.ByteString.copyFrom(if(value.signum()==0)byteArrayOf()else value.toByteArray().dropWhile{it==0.toByte()}.toByteArray())
+            val tx=wallet.core.jni.proto.Ethereum.Transaction.newBuilder().setContractGeneric(wallet.core.jni.proto.Ethereum.Transaction.ContractGeneric.newBuilder()
+                .setAmount(com.google.protobuf.ByteString.EMPTY).setData(com.google.protobuf.ByteString.copyFrom(q.data.hexBytes())))
+            val input=wallet.core.jni.proto.Ethereum.SigningInput.newBuilder().setPrivateKey(com.google.protobuf.ByteString.copyFrom(key)).setChainId(bytes(97.toBigInteger()))
+                .setNonce(bytes(q.nonce)).setGasLimit(bytes(q.gasLimit)).setToAddress(q.settlement).setTransaction(tx)
+            if(q.delegate){
+                // WalletCore's automatic authorization assumes a self-call. This transaction
+                // calls the fixed settlement contract; sign an explicit chain-bound tuple.
+                val authorizationNonce=bytes(q.nonce+java.math.BigInteger.ONE)
+                val authorizationHash=wallet.core.jni.Eip7702.getAuthorizationHash(bytes(97.toBigInteger()).toByteArray(),q.accountImplementation,authorizationNonce.toByteArray())
+                val authorizationSignature=wallet.core.jni.PrivateKey(key).sign(authorizationHash,wallet.core.jni.Curve.SECP256K1)
+                val authorization=wallet.core.jni.proto.Ethereum.Authorization.newBuilder().setAddress(q.accountImplementation)
+                    .setCustomSignature(wallet.core.jni.proto.Ethereum.AuthorizationCustomSignature.newBuilder().setChainId(bytes(97.toBigInteger())).setNonce(authorizationNonce).setSignature(authorizationSignature.hex()))
+                input.setTxMode(wallet.core.jni.proto.Ethereum.TransactionMode.SetCode).setMaxInclusionFeePerGas(bytes(q.gasPrice)).setMaxFeePerGas(bytes(q.gasPrice))
+                .setEip7702Authorization(authorization)}
+            else input.setGasPrice(bytes(q.gasPrice))
+            val result=wallet.core.java.AnySigner.sign(input.build(),wallet.core.jni.CoinType.ETHEREUM,wallet.core.jni.proto.Ethereum.SigningOutput.parser())
+            check(result.error==wallet.core.jni.proto.Common.SigningError.OK && !result.encoded.isEmpty){"Não foi possível assinar a autorização."}
+            val raw=result.encoded.toByteArray();"0x"+wallet.core.jni.Hash.keccak256(raw).hex() to "0x"+raw.hex()
+        }finally{key.fill(0)}
+    }
+
     private fun originKey(context:Context,walletId:String,index:Int,from:String):ByteArray {
         val current=checkNotNull(session)
         val stored=decryptPayload(readRecord(context),current.key).catalog.wallets.first{it.id==walletId}

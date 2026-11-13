@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sys
 import subprocess
 import tempfile
 import time
@@ -53,6 +54,7 @@ def mine_transaction(transaction):
 
 
 def main():
+    keeper_only = "--keeper-only" in sys.argv
     # Refuse to borrow an existing RPC, even if it claims chain 97.
     try:
         rpc("eth_chainId", [])
@@ -85,19 +87,29 @@ def main():
                 deployed = mine_transaction({"from": deployer, "data": artifact["bytecode"]["object"] + constructor})
                 address = deployed["contractAddress"]
                 config = {"address": address, "runtimeHash": cast("keccak", rpc("eth_getCode", [address, "latest"]))}
-                subprocess.run(ADB + ["reverse", "tcp:18797", "tcp:18797"], check=True, capture_output=True)
-                subprocess.run(ADB + ["shell", f"run-as {APP} sh -c 'cat > files/origin-local-fixture.json'"],
-                               input=json.dumps(config).encode(), check=True, capture_output=True)
-                result = subprocess.run(ADB + ["shell", "am", "instrument", "-w", "-e", "originLocal", "true",
-                                        "-e", "class", "com.caedralpay.wallet.OriginIntegrationTest",
-                                        APP + ".test/androidx.test.runner.AndroidJUnitRunner"],
-                                        check=True, timeout=240, capture_output=True, text=True)
-                print(result.stdout)
-                if "OK (1 test)" not in result.stdout or "FAILURES!!!" in result.stdout:
-                    raise RuntimeError("Origin E2E failed")
+                rec = json.loads((ROOT / "protocol/out/CaedralRecurringPayments.sol/CaedralRecurringPayments.json").read_text())
+                settlement = mine_transaction({"from": deployer, "data": rec["bytecode"]["object"] + constructor})["contractAddress"]
+                account = json.loads((ROOT / "protocol/out/CaedralRecurringPayments.sol/CaedralRecurringAccount.json").read_text())
+                delegate = mine_transaction({"from": deployer, "data": account["bytecode"]["object"] + settlement[2:].lower().zfill(64) + TOKEN[2:].lower().zfill(64)})["contractAddress"]
+                config["recurring"] = {"address": settlement, "hash": cast("keccak", rpc("eth_getCode", [settlement,"latest"])), "account": delegate, "accountHash": cast("keccak", rpc("eth_getCode", [delegate,"latest"]))}
+                if not keeper_only:
+                    subprocess.run(ADB + ["reverse", "tcp:18797", "tcp:18797"], check=True, capture_output=True)
+                    subprocess.run(ADB + ["shell", f"run-as {APP} sh -c 'cat > files/origin-local-fixture.json'"],
+                                   input=json.dumps(config).encode(), check=True, capture_output=True)
+                    result = subprocess.run(ADB + ["shell", "am", "instrument", "-w", "-e", "originLocal", "true",
+                                            "-e", "class", "com.caedralpay.wallet.OriginIntegrationTest,com.caedralpay.wallet.RecurringIntegrationTest",
+                                            APP + ".test/androidx.test.runner.AndroidJUnitRunner"],
+                                            check=True, timeout=360, capture_output=True, text=True)
+                    print(result.stdout)
+                    if "OK (3 tests)" not in result.stdout or "FAILURES!!!" in result.stdout:
+                        raise RuntimeError("Origin E2E failed")
+                fixture = Path(directory) / "fixture.json"
+                fixture.write_text(json.dumps(config))
+                subprocess.run(["node", str(ROOT / "qa/recurring-keeper-test.mjs"), str(fixture)], check=True, timeout=90)
             finally:
-                subprocess.run(ADB + ["shell", "run-as", APP, "rm", "-f", "files/origin-local-fixture.json"], capture_output=True)
-                subprocess.run(ADB + ["reverse", "--remove", "tcp:18797"], capture_output=True)
+                if not keeper_only:
+                    subprocess.run(ADB + ["shell", "run-as", APP, "rm", "-f", "files/origin-local-fixture.json"], capture_output=True)
+                    subprocess.run(ADB + ["reverse", "--remove", "tcp:18797"], capture_output=True)
                 node.terminate()
                 node.wait(timeout=10)
 

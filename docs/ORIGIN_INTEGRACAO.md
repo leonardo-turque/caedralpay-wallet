@@ -2,6 +2,8 @@
 
 13/11/2026. Integração na branch de desenvolvimento. O APK do beta público não foi substituído. Esta etapa implementa Origin; Obsidian e Sovereign não estão habilitados.
 
+O fluxo de maquininha foi reorganizado em etapas; consulte [recorrência e autorização inicial](RECORRENCIA.md) para débito automático, calendário, cancelamento e executor. Parcelamento foi retirado do fluxo.
+
 ## Como testar com dois Androids
 
 Use o mesmo build nos dois aparelhos, Android API 37+, NFC habilitado, com contas **diferentes**. Selecione BSC testnet nas configurações existentes. O cartão não tem um saldo próprio.

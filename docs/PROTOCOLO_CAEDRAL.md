@@ -75,7 +75,7 @@ O pagador envia uma transação própria. ERC20 requer aprovação prévia do va
 6. Definir devoluções, cashback de vendas canceladas, abuso por compras circulares e reservas. Resolver financiamento dos benefícios futuros.
 7. Construir API/SDK públicos versionados, testes de conformidade, exemplos de integração e política da marca. Integrações de terceiros não podem obter controle das chaves dos usuários.
 8. Cartão físico: selecionar secure element e fabricante, emissão segura de credencial própria, revogação/renovação, testes RF dos materiais. Nunca copiar a seed da carteira para o cartão.
-9. Assinaturas/recorrência e parcelamento exigem autorização separada, limitada e revogável; não existem nesta versão de compra avulsa. Caedral não adianta valores nem garante parcelas.
+9. O fluxo atual não oferece parcelamento. Assinaturas por débito automático foram implementadas separadamente, com autorização limitada e revogável: consulte [recorrência](RECORRENCIA.md). Este contrato anterior continua separado dos contratos Origin/recorrência.
 
 ## Reproduzir
 

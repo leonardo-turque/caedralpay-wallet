@@ -135,7 +135,7 @@ class OriginIntegrationTest {
             val sealed=CaedralNfcCrypto.seal(hello.copyOfRange(0,44),invoice.wire())
             Assert.assertEquals(289,sealed.size)
             for(chunk in OriginApdu.chunks(sealed))Assert.assertArrayEquals(OriginApdu.ok,service.processCommandApdu(chunk,null))
-            Assert.assertEquals(invoice.request.id,OriginTapSession.request.value!!.invoice.request.id)
+            Assert.assertEquals(invoice.request.id,OriginTapSession.request.value!!.invoice!!.request.id)
             Assert.assertFalse(service.processCommandApdu(OriginApdu.chunks(sealed).last(),null).contentEquals(OriginApdu.ok))
             val merchantEngine=OriginMerchant(context,gateway);val sale=merchantEngine.save(invoice,first)
             val treasury="0x"+(local("eth_call",listOf(mapOf("to" to OriginNetwork.address,"data" to "0x"+OriginAbi.selector("treasury()")),"latest")) as String).takeLast(40)

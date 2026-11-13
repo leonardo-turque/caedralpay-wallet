@@ -22,3 +22,5 @@ signing.properties
 __pycache__/
 qa/evm/out/
 qa/evm/cache/
+
+protocol/keeper/node_modules/

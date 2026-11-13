@@ -17,7 +17,7 @@ enum class BscChain(
         listOf("https://bsc-dataseed.bnbchain.org", "https://bsc-dataseed-public.bnbchain.org"),
         "0x55d398326f99059fF775485246999027B3197955"),
     Testnet(97, "BNB Smart Chain Testnet", "tBNB", "https://testnet.bscscan.com",
-        listOf("https://bsc-testnet-dataseed.bnbchain.org", "https://bsc-testnet.bnbchain.org"),
+        listOf("https://bsc-testnet-rpc.publicnode.com", "https://bsc-testnet-dataseed.bnbchain.org", "https://bsc-testnet.bnbchain.org"),
         "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd",
         faucetUrl = "https://www.bnbchain.org/en/testnet-faucet");
 

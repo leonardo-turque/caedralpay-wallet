@@ -34,7 +34,7 @@ internal object CaedralNfcCrypto {
         }
     }
     fun seal(recipient: ByteArray, clear: ByteArray): ByteArray {
-        require(clear.size == CaedralProtocol.WIRE_SIZE || clear.size == OriginInvoice.SIZE)
+        require(clear.size in setOf(CaedralProtocol.WIRE_SIZE,OriginInvoice.SIZE,RecurringOffer.SIZE))
         val sender = Ephemeral()
         val key = key(sender.secret(recipient), recipient, sender.publicKey)
         return try {
@@ -46,7 +46,7 @@ internal object CaedralNfcCrypto {
         } finally { key.fill(0) }
     }
     fun open(recipient: Ephemeral, envelope: ByteArray): ByteArray {
-        require(envelope.size == ENVELOPE_SIZE || envelope.size == OriginInvoice.SIZE + 72)
+        require(envelope.size in setOf(ENVELOPE_SIZE,OriginInvoice.SIZE+72,RecurringOffer.SIZE+72))
         val sender = envelope.copyOfRange(0, PUBLIC_SIZE)
         val key = key(recipient.secret(sender), recipient.publicKey, sender)
         return try {

@@ -55,6 +55,7 @@ internal data class OriginInvoice(val request: CaedralProtocol.Invoice, val sign
 }
 
 internal object OriginAbi {
+    fun hashBytes(bytes:ByteArray):ByteArray {System.loadLibrary("TrustWalletCore");return wallet.core.jni.Hash.keccak256(bytes)}
     fun hash(text: String): ByteArray { System.loadLibrary("TrustWalletCore"); return wallet.core.jni.Hash.keccak256(text.toByteArray()) }
     fun word(value: BigInteger) = value.toString(16).padStart(64, '0').also { require(value.signum() >= 0 && it.length == 64) }
     fun addr(value: String) = value.drop(2).lowercase().padStart(64, '0').also { require(value.matches(Regex("0x[0-9a-fA-F]{40}"))) }

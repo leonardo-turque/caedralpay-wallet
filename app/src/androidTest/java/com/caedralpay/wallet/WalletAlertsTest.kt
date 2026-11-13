@@ -15,6 +15,8 @@ import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class WalletAlertsTest {
+    @get:org.junit.Rule val activity=androidx.compose.ui.test.junit4.createAndroidComposeRule<androidx.activity.ComponentActivity>()
+    @org.junit.Before fun keepUnlocked(){InstrumentationRegistry.getInstrumentation().runOnMainSync{activity.activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}}
     @Test fun notificationKeepsFinancialDetailsOffLockScreen() {
         val context = context()
         org.junit.Assume.assumeTrue(context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED)
@@ -23,6 +25,8 @@ class WalletAlertsTest {
             val event = WalletAlert(AlertKind.OutgoingConfirmed, "97:private-reference:" + UUID.randomUUID())
             WalletAlerts.publish(context, event)
             val manager = context.getSystemService(android.app.NotificationManager::class.java)
+            val deadline=android.os.SystemClock.elapsedRealtime()+3000
+            while(manager.activeNotifications.none{it.tag==event.dedupKey} && android.os.SystemClock.elapsedRealtime()<deadline)android.os.SystemClock.sleep(50)
             val notification = manager.activeNotifications.single { it.tag == event.dedupKey }.notification
             assertEquals(android.app.Notification.VISIBILITY_PRIVATE, notification.visibility)
             assertEquals("Envio confirmado", notification.extras.getString(android.app.Notification.EXTRA_TITLE))

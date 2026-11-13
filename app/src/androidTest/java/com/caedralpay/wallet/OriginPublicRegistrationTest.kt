@@ -45,9 +45,18 @@ class OriginPublicRegistrationTest {
             try{engine.prepare(OriginCall.forCard(OriginAction.Pay,card,invoice),account.address)}
             catch(e:IllegalArgumentException){Assert.assertTrue(e.message.orEmpty().contains("Saldo"));insufficient=true}
             Assert.assertEquals(historyBefore,engine.history().size)
+            val recurring=RecurringEngine(context)
+            val codeBefore=EvmGateway().read(BscChain.Testnet){it.hex("eth_getCode",account.address,"latest")}
+            val recurringDraft=recurring.draft(MerchantCharge(BscChain.Testnet,WalletAsset.BNB,"0.12",MerchantPaymentKind.Recurring,30),merchant.address)
+            val recurringSign=WalletVault.authorizeWithPin(context,fixture.getString("pin").toCharArray(),VaultAction.SignInvoice,card.walletId,1,OriginAbi.sha(recurringDraft.digest().hex()))
+            val recurringOffer=WalletVault.signRecurringOffer(context,card.walletId,1,recurringDraft,recurringSign)
+            var recurringBlocked=false
+            try{recurring.prepare(recurringOffer,card)}catch(e:IllegalArgumentException){Assert.assertTrue(e.message.orEmpty().contains("Saldo"));recurringBlocked=true}
+            Assert.assertTrue(recurringBlocked);Assert.assertTrue(recurring.history().isEmpty())
+            Assert.assertEquals(codeBefore,EvmGateway().read(BscChain.Testnet){it.hex("eth_getCode",account.address,"latest")})
             File(target.filesDir,"origin-public-result.json").writeText(JSONObject().put("chainId",97).put("settlement",OriginNetwork.address)
                 .put("holder",account.address).put("cardId",card.id).put("expiresAt",card.expiresAt).put("readyForTap",true)
-                .put("activationSent",false).put("purchaseSent",false).put("merchantInvoiceVerified",true).put("insufficientFundsBlocked",insufficient).toString())
+                .put("recurringContractsVerified",true).put("recurringInsufficientFundsBlocked",recurringBlocked).put("recurringAuthorizationSent",false).put("activationSent",false).put("purchaseSent",false).put("merchantInvoiceVerified",true).put("insufficientFundsBlocked",insufficient).toString())
         }finally{pin.fill('\u0000');OriginTapSession.clear();WalletVault.lock()}
     }
 }

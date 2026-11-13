@@ -26,6 +26,7 @@ import kotlinx.coroutines.*
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.ZoneOffset
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Composable
@@ -47,6 +48,10 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
     var permit by remember{mutableStateOf<OriginPaymentPermit?>(null)}
     var received by remember{mutableStateOf<OriginInvoice?>(null)};var quote by remember{mutableStateOf<OriginQuote?>(null)}
     var operation by remember{mutableStateOf<OriginRecord?>(null)}
+    val recurringEngine=remember(context,gateway){RecurringEngine(context,gateway ?: EvmGateway())}
+    var recurringQuote by remember{mutableStateOf<RecurringQuote?>(null)}
+    var recurringRecord by remember{mutableStateOf<RecurringRecord?>(null)}
+    var subscriptionsOpen by remember{mutableStateOf(false)}
     val incoming by OriginTapSession.request.collectAsState()
     fun fail(e:Exception){error=e.message?.takeIf{it.length<160 && it!="Failed requirement."} ?: "Não foi possível concluir. Tente novamente."}
     fun stopTap(){
@@ -56,9 +61,9 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
     }
     suspend fun reload() {
         val loaded=withContext(Dispatchers.IO){
-            OriginCardStore.latest(context,wallet,account.index) to engine.history().lastOrNull{!it.terminal && it.quote.from.equals(account.address,true)}
+            Triple(OriginCardStore.latest(context,wallet,account.index),engine.history().lastOrNull{!it.terminal && it.quote.from.equals(account.address,true)},recurringEngine.history().lastOrNull{!it.terminal && it.quote.from.equals(account.address,true)})
         }
-        card=loaded.first;operation=loaded.second
+        withContext(Dispatchers.Main.immediate){card=loaded.first;operation=loaded.second;recurringRecord=loaded.third}
     }
     suspend fun prepareReceived(invoice:OriginInvoice,owner:OriginCard){
         invoice.validate();require(owner.id==card?.id && owner.walletId==wallet && owner.index==account.index)
@@ -84,14 +89,14 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
                         val service=CardEmulation.getInstance(adapter)
                         require(service.setPreferredService(activity,ComponentName(activity,OriginHostService::class.java)))
                         preferredService=service
-                        try{OriginTapSession.arm(current);tapping=true;error=null;quote=null;paymentDraft=null;received=null;operation=null}
+                        try{OriginTapSession.arm(current);tapping=true;error=null;quote=null;paymentDraft=null;received=null;operation=null;recurringQuote=null;recurringRecord=null}
                         catch(e:Exception){stopTap();throw e}
                     }
     }
     LaunchedEffect(wallet,account.index){loading=true;auth=null;error=null;try{stopTap();details=null;quote=null;reload();form=card==null}catch(c:CancellationException){throw c}catch(e:Exception){fail(e)}finally{loading=false}}
     LaunchedEffect(incoming){val request=incoming ?: return@LaunchedEffect
         stopTap();loading=true;error=null
-        try{prepareReceived(request.invoice,request.card)}catch(c:CancellationException){throw c}catch(e:Exception){fail(e)}finally{loading=false}
+        try{if(request.recurring!=null){require(request.card.id==card?.id && request.card.walletId==wallet && request.card.index==account.index);recurringQuote=recurringEngine.prepare(request.recurring,request.card)}else prepareReceived(requireNotNull(request.invoice),request.card)}catch(c:CancellationException){throw c}catch(e:Exception){fail(e)}finally{loading=false}
     }
     LaunchedEffect(tapping){if(tapping){contentScroll.animateScrollTo(0);delay(120_000);stopTap()}}
     LaunchedEffect(details){if(details!=null){withFrameNanos{};contentScroll.animateScrollTo(contentScroll.maxValue);delay(30_000);details=null}}
@@ -116,23 +121,22 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
         }else {WalletVault.cancelOriginPayment(permit);permit=null;error="A operação não foi concluída pela rede. Confira a atividade antes de tentar novamente."}
     }
 
+    LaunchedEffect(recurringRecord?.hash){var current=recurringRecord ?: return@LaunchedEffect
+        while(!current.terminal){try{if(current.status==TransactionStatus.Signed)current=recurringEngine.resume(current);current=recurringEngine.refresh(current);recurringRecord=current}catch(c:CancellationException){throw c}catch(_:Exception){error="Não foi possível atualizar a confirmação."};if(!current.terminal)delay(2000)}
+        if(current.status==TransactionStatus.Failed)error="A autorização não foi confirmada."
+    }
     DisposableEffect(lifecycle){val observer=LifecycleEventObserver{_,event->if(event==Lifecycle.Event.ON_PAUSE){stopTap();details=null;WalletVault.cancelOriginPayment(permit);permit=null}}
         lifecycle.addObserver(observer);onDispose{lifecycle.removeObserver(observer);stopTap();details=null;WalletVault.cancelOriginPayment(permit);permit=null;WalletVault.revokeAuthorization()}}
+    if(subscriptionsOpen){OriginSubscriptionsSheet(snapshot,onDismiss={subscriptionsOpen=false},gateway=gateway);return}
     CaedralSheet("Seu cartão Origin",onDismiss=onDismiss){
         Column(Modifier.verticalScroll(contentScroll),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             val shown=card
             OriginCardVisual(shown?.name ?: "SEU NOME",shown?.lastFour.orEmpty(),tapping,
-                onClick=card?.takeIf{!loading && !form && !tapping && operation?.terminal!=false && permit==null && quote==null}?.let{current->{requestTap(current)}})
+                onClick=card?.takeIf{!loading && !form && !tapping && operation?.terminal!=false && recurringRecord?.terminal!=false && permit==null && quote==null && recurringQuote==null}?.let{current->{requestTap(current)}})
             if(tapping)NfcPulse()
-            OriginAccountSummary(account.name)
-            if(card!=null && !tapping && quote==null && operation?.terminal!=false) {
-                Text("Um cartão para todas as redes",style=MaterialTheme.typography.titleMedium)
-                Text("Mesmo número, nome, validade e código de segurança. Trocar de rede não altera seu cartão.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-            }
             if(loading)CircularProgressIndicator(Modifier.size(24.dp))
             error?.let{Text(it,color=MaterialTheme.colorScheme.error)}
             if(form){
-                if(card!=null)Text("O novo nome e os novos dados serão usados no mesmo cartão, em todas as redes.")
                 OutlinedTextField(first,{first=it.take(40)},label={Text("Nome no cartão")},singleLine=true,modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(last,{last=it.take(40)},label={Text("Sobrenome")},singleLine=true,modifier=Modifier.fillMaxWidth())
                 CaedralButton(onClick={
@@ -148,6 +152,19 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
                     else scope.launch{try{create(null)}catch(c:CancellationException){throw c}catch(e:Exception){fail(e)}}
                 },enabled=first.isNotBlank() && last.isNotBlank() && !loading,modifier=Modifier.fillMaxWidth()){Text(if(card==null)"Criar meu Origin" else "Gerar novo cartão")}
 
+            }else if(recurringRecord?.terminal==false){
+                Text("Confirmando assinatura",style=MaterialTheme.typography.titleMedium);CircularProgressIndicator(Modifier.size(24.dp))
+                BscExplorerButton("Comprovante","/tx/${recurringRecord!!.hash}",OriginNetwork.chain)
+            }else if(recurringQuote!=null){
+                val q=recurringQuote!!;val o=q.offer!!
+                Text("Autorizar recorrência",style=MaterialTheme.typography.titleLarge)
+                Text(formatAssetQuantity(BigDecimal(o.gross,18),if(o.token==CaedralProtocol.ZERO_ADDRESS)OriginNetwork.chain.nativeSymbol else "USDT"),style=MaterialTheme.typography.headlineMedium)
+                Text("A cada ${o.intervalDays} dias")
+                Text(if(o.endAt==0L)"Sem encerramento" else "Até "+DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(ZoneId.systemDefault()).format(Instant.ofEpochSecond(o.endAt)))
+                Text("Lojista: "+o.merchant.take(10)+"…"+o.merchant.takeLast(8),style=MaterialTheme.typography.bodySmall,color=C.Muted)
+                Text("Taxa de rede máxima: "+formatAssetQuantity(BigDecimal(q.fee,18),OriginNetwork.chain.nativeSymbol),style=MaterialTheme.typography.bodySmall,color=C.Muted)
+                CaedralButton(onClick={auth=OriginAuth("Autorizar débitos automáticos",VaultAction.SignOrigin,wallet,account.index,q.digest){token->recurringRecord=recurringEngine.send(q,wallet,account.index,token);recurringQuote=null;error=null}},modifier=Modifier.fillMaxWidth()){Text("Autorizar e pagar")}
+                TextButton(onClick={recurringQuote=null}){Text("Cancelar")}
             }else if(operation?.terminal==false || permit!=null){
                 Text("Processando compra",style=MaterialTheme.typography.titleMedium)
                 CircularProgressIndicator(Modifier.size(24.dp))
@@ -161,7 +178,6 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
                     val split=CaedralProtocol.split(i.request.gross,18,CaedralProtocol.Tier.Origin,Instant.now())
                     val symbol=if(i.request.token==CaedralProtocol.ZERO_ADDRESS)OriginNetwork.chain.nativeSymbol else "USDT"
                     Text("Cashback na sua conta: ${BigDecimal(split.cashback,18).stripTrailingZeros().toPlainString()} $symbol",fontWeight=FontWeight.SemiBold)
-                    Text("Creditado na mesma transação, descontado da taxa Caedral.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text("Taxa de rede máxima: ${BigDecimal(requireNotNull(paymentDraft).maximumGas,18).stripTrailingZeros().toPlainString()} ${OriginNetwork.chain.nativeSymbol}")
                 CaedralButton(onClick={val draft=requireNotNull(paymentDraft);auth=OriginAuth("Confirmar compra",VaultAction.SignOrigin,wallet,account.index,draft.digest){token->
@@ -172,7 +188,8 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
                 TextButton(onClick={quote=null;paymentDraft=null;received=null;WalletVault.cancelOriginPayment(permit);permit=null}){Text("Cancelar")}
             }else if(tapping){TextButton(onClick=::stopTap){Text("Encerrar aproximação")}}
             else {
-                if(operation?.status==TransactionStatus.Confirmed && operation?.quote?.call?.kind==OriginAction.Pay){Text("Pagamento confirmado",style=MaterialTheme.typography.titleLarge);Text("O cashback foi creditado nesta conta, na moeda da compra.",style=MaterialTheme.typography.bodyMedium)}
+                if(operation?.status==TransactionStatus.Confirmed && operation?.quote?.call?.kind==OriginAction.Pay){Text("Pagamento confirmado",style=MaterialTheme.typography.titleLarge)}
+                if(recurringRecord?.status==TransactionStatus.Confirmed)Text("Assinatura autorizada",style=MaterialTheme.typography.titleLarge)
                 card?.let{current->
                     CaedralButton(onClick={requestTap(current)},enabled=!loading,modifier=Modifier.fillMaxWidth()){Text("Aproximar para pagar")}
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -181,21 +198,11 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
                     }
                 }
             }
+            if(!tapping && operation?.terminal!=false && recurringRecord?.terminal!=false && permit==null)TextButton(onClick={stopTap();subscriptionsOpen=true}){Text("Assinaturas")}
             details?.let{d->OriginCardDetailsPanel(requireNotNull(card),d,onHide={details=null})}
         }
     }
     auth?.let{request->OriginAuthDialog(request,onDismiss={auth=null})}
-}
-
-@Composable
-internal fun OriginAccountSummary(accountName:String) {
-    Surface(color=C.Selected.copy(alpha=.5f),shape=MaterialTheme.shapes.large,border=BorderStroke(1.dp,C.Divider.copy(alpha=.45f))) {
-        Column(Modifier.fillMaxWidth().padding(18.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
-            Text("CONTA VINCULADA",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(accountName,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
-            Text("Compras e cashback usam diretamente esta conta.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
 }
 
 @Composable

@@ -151,6 +151,7 @@ internal class OriginEngine(private val context:Context,private val gateway:EvmG
     }
     suspend fun send(q:OriginQuote,walletId:String,index:Int,token:VaultAuthorization):OriginRecord=WalletOperationGate.mutex.withLock {
         q.validate()
+        require(RecurringJournal(context).all().none{!it.terminal && it.quote.from.equals(q.from,true)}){"Há uma autorização em andamento."}
         check(journal.all().none{!it.terminal && it.quote.from.equals(q.from,true)} && TransactionJournal(context).all().none{!it.terminal && it.quote.chain==OriginNetwork.chain && it.quote.from.equals(q.from,true)}) { "Há uma operação anterior em acompanhamento." }
         gateway.read(OriginNetwork.chain) { rpc ->
             OriginNetwork.verify(rpc); verifyTokens(rpc,q.call,q.from)

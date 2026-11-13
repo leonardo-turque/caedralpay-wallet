@@ -92,6 +92,9 @@ fun WalletHomeScreen(
         val outgoing = TransactionEngine(context)
         val origin = OriginEngine(context)
         val originMerchant = OriginMerchant(context)
+        val recurring = RecurringEngine(context)
+        val recurringMerchant = RecurringMerchant(context)
+        val recurringActivity = RecurringActivityWatcher()
         while (true) {
             try {
                 incoming.poll(context, network, account.address)
@@ -102,9 +105,14 @@ fun WalletHomeScreen(
                     .forEach { outgoing.refresh(it) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { /* Keep cursor/outbox and retry; no unverified alerts. */ }
-            if(network==OriginNetwork.chain) try {
+            if(BuildConfig.CAEDRAL_PROTOCOL_PREVIEW) try {
                 origin.history().filter{!it.terminal && it.quote.from.equals(account.address,true)}.forEach{origin.refresh(it)}
                 OriginSales(context).all().filter{it.hash==null && !it.expired && it.invoice.request.merchant.equals(account.address,true)}.forEach{originMerchant.poll(it)}
+            } catch(cancelled:CancellationException){throw cancelled} catch(_:Exception){ }
+            if(BuildConfig.CAEDRAL_PROTOCOL_PREVIEW) try {
+                recurringActivity.poll(context,account.address)
+                recurring.history().filter{!it.terminal && it.quote.from.equals(account.address,true)}.forEach{recurring.refresh(it)}
+                RecurringOffers(context).all().filter{it.hash==null && !it.expired && it.offer.merchant.equals(account.address,true)}.forEach{recurringMerchant.poll(it)}
             } catch(cancelled:CancellationException){throw cancelled} catch(_:Exception){ }
             delay(5_000)
         }
