@@ -120,7 +120,7 @@ class WalletManagementUiTest {
             File(context.getExternalFilesDir(null), "home-${theme.name}.png").outputStream().use { output ->
                 compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, output)
             }
-            compose.onNodeWithText("Comprar").assertIsNotEnabled()
+            compose.onNodeWithText("Trocar").assertIsNotEnabled()
             compose.onNodeWithText("Receber").assertIsEnabled()
         }
     }

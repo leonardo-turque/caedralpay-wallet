@@ -8,7 +8,7 @@ O fluxo de maquininha foi reorganizado em etapas; consulte [recorrência e autor
 
 Use o mesmo build nos dois aparelhos, Android API 37+, NFC habilitado, com contas **diferentes**. Selecione BSC testnet nas configurações existentes. O cartão não tem um saldo próprio.
 
-1. Pagador: **Cartões**, informe um nome e um sobrenome, **Criar meu Origin**. Os dados ficam prontos localmente, sem ativar rede ou moeda e sem transação de emissão.
+1. Pagador: toque no **cartão na home**, informe um nome e um sobrenome, **Criar meu Origin**. Os dados ficam prontos localmente, sem ativar rede ou moeda e sem transação de emissão.
 2. Lojista: na rede que escolheu, abra **Maquininha**, escolha a moeda, digite o valor e **Criar cobrança**. O lojista assina a cobrança. O cliente não escolhe nem troca a moeda dessa compra.
 3. Pagador: toque no Origin ou em **Aproximar para pagar**. A autenticação tenta primeiro a biometria forte configurada no aparelho/cofre. O PIN aparece como alternativa, quando necessário. O cartão fica vertical e o indicador NFC pulsa. Essa etapa não depende da rede selecionada na home nem de um registro prévio on-chain.
 4. Encoste as traseiras dos aparelhos, com ambos abertos/desbloqueados. A cobrança recebida determina rede, moeda, lojista e valor. Revise o valor e o teto total de gás e confirme a compra. Não há tela de ativação de rede ou de moeda. Se o token precisar de aprovação técnica, o app a executa como parte da compra já consentida, com valor exato, destinos fixos e orçamento limitado.
@@ -53,7 +53,7 @@ AID privado experimental **F0434145445202**, separado do laboratório antigo `..
 - Solicitação: invoice binária de 152 bytes + assinatura ECDSA de 65 bytes = 217 bytes.
 - Envelope X25519/HKDF-SHA256/AES-256-GCM: 44 bytes de chave pública + 12 IV + 217 ciphertext + 16 tag = 289 bytes. AAD inclui contexto e ambas as chaves públicas.
 - Dois APDUs `80 20 seq final tamanho dados`, payload de 200 e 89 bytes. Sequência e limites estritos. `9000` significa entrega, nunca pagamento.
-- Sessão de 120 segundos, efêmera, uma solicitação por autenticação do cartão. Pausa, saída e bloqueio apagam a sessão. Dados do cartão, nome, PIN, seed e chave de gasto não passam no NFC.
+- Sessão de 60 segundos, efêmera, uma solicitação por autenticação do cartão. Pausa, saída e bloqueio apagam a sessão. Dados do cartão, nome, PIN, seed e chave de gasto não passam no NFC.
 
 A assinatura impede alteração silenciosa da cobrança; o canal não oferece prova criptográfica de distância e não elimina relay ativo. O pagador revisa e autoriza a compra no próprio aparelho. Identificador experimental não implica certificação NFC/EMV ou registro mundial do AID.
 
@@ -78,3 +78,15 @@ A Wallet recusa saldo negativo/inválido, saldo inferior ao bruto ou falta de mo
 A confirmação autoriza somente uma cobrança assinada, o cartão/conta correspondente e um teto de gasto em gás. A capacidade é opaca, temporária (até 90 segundos e limitada pelo prazo da cobrança), vinculada à sessão desbloqueada e não é persistida. Ela permite apenas a sequência necessária: pagamento, aprovação exata + pagamento, ou zerar aprovação + aprovação exata + pagamento. Cada etapa recebe uma autorização de assinatura de uso único; destino, calldata, nonce e gás continuam validados pelo assinador/outbox. Não se aceita aumento de preço de gás além do preço consentido, outra cobrança, outro cartão ou repetição de etapa. O orçamento de gás restante diminui a cada assinatura. Pausa, fechamento ou bloqueio encerram a capacidade; retomar pode exigir nova confirmação, mas nunca inventa um novo hash para um envio anterior.
 
 O cliente não recebe crédito nem utiliza o saldo de outra moeda como substituto. A moeda é sempre a da cobrança do lojista. As aprovações ERC-20 fazem parte da compra autorizada e não habilitam débito sem assinatura do titular. A integração de pagamentos desta fase permanece fixada ao deployment testnet verificado; isso não representa disponibilidade em blockchains ainda não integradas.
+
+## Ajustes de home e aproximação — 13/11/2026
+
+O cartão da conta selecionada aparece diretamente na home; tocar nele abre o painel de dados/regeneração. As ações são Trocar (desativado), Enviar, Receber e Maquininha, com ícone vetorial próprio de terminal. Assinaturas ganhou acesso em formato de linha de navegação. O botão Encerrar aproximação foi removido; fechar o painel ou sair do app encerra a sessão.
+
+A prontidão NFC expira em 60 segundos no serviço HCE. Se o painel continua ativo e em primeiro plano sem receber uma cobrança, o aplicativo pede nova autenticação (biometria prioritária/PIN alternativo); só após validá-la gera outra sessão. A janela não se estende por detectar um leitor. O prazo da oferta do lojista continua separado (120 segundos).
+
+A tela de recebimento mostra uma animação vetorial de cartão aproximando do telefone e ondas NFC, com suporte a movimento reduzido. A leitura começa automaticamente quando a cobrança está pronta, sem botão Apresentar cobrança, e retoma ao voltar ao primeiro plano enquanto a oferta ainda é válida e não foi entregue.
+
+A detecção do celular pelo RC522 não comprova seleção do AID Caedral, troca APDU cifrada ou liquidação. A biblioteca padrão não oferece o caminho de smartphone/HCE; a discussão técnica da NXP indica que uma implementação ISO-DEP adicional pode ser necessária. O laboratório Mega/RC522 continua sem comandos novos enquanto a adaptação elétrica dos sinais de 5 V para 3,3 V não estiver resolvida. [Biblioteca](https://github.com/miguelbalboa/rfid#what-works-and-not) · [NXP](https://community.nxp.com/t5/NFC/Either-MFRC522-or-PN532-is-compliant-with-ISO14443-4-Type-Tag/m-p/905926).
+
+A pesquisa separada sobre Mastercard fiduciário está em [Fiat e cripto](PESQUISA_FIAT_CRIPTO.md); não representa implementação ou habilitação de Mastercard.

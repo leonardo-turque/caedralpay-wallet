@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-13",
+  "scope": "home card, subscriptions navigation, merchant illustration, 60-second NFC revalidation",
+  "jvmUnitTests": 67,
+  "jvmFailures": 0,
+  "instrumentedUniqueCasesPassed": 28,
+  "instrumentedFailures": 0,
+  "normalBuildPassed": true,
+  "isolatedBuildPassed": true,
+  "lintErrors": 0,
+  "tapWindowMilliseconds": 60000,
+  "expiryBoundaryAndFreshKeyTested": true,
+  "physicalBiometricRenewalTested": false,
+  "homeCardPreservedOnReopen": true,
+  "homeCardUpdatedAfterAuthenticatedRegeneration": true,
+  "homeQuickActions": [
+    "Trocar (disabled)",
+    "Enviar",
+    "Receber",
+    "Maquininha"
+  ],
+  "merchantAnimationVisuallyReviewed": true,
+  "readerStartsAutomatically": true,
+  "rc522HardwareTested": false,
+  "rc522Blocker": "Mega 5V signal level conversion to 3.3V not installed/confirmed",
+  "fiatResearchOnly": true,
+  "productionApproved": false,
+  "phoneAppsInstalled": false,
+  "publicApkReplaced": false,
+  "apkSha256": "a35d5844e933aa05ddb8273a69ed3d3ceb58e5e05d63ab7845c1b7a5fd0cc81c"
+}

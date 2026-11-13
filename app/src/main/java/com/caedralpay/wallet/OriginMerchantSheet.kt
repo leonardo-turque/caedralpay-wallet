@@ -82,13 +82,13 @@ internal fun OriginMerchantSheet(snapshot:WalletAccountsSnapshot,network:BscChai
                     val draft=merchant.draft(charge.chain,account.address,charge.asset,charge.amount)
                     auth=OriginAuth("Criar cobrança",VaultAction.SignInvoice,snapshot.selectedWalletId,account.index,OriginAbi.sha(OriginAbi.invoiceDigest(draft.first).hex())){token->
                         val signed=withContext(Dispatchers.IO){WalletVault.signOriginInvoice(context,snapshot.selectedWalletId,account.index,draft.first,token)}
-                        sale=withContext(Dispatchers.IO){merchant.save(signed,draft.second)};delivered=false;go(MerchantStep.Present);startReader()
+                        sale=withContext(Dispatchers.IO){merchant.save(signed,draft.second)};delivered=false;go(MerchantStep.Present)
                     }
                 }else {
                     val draft=recurring.draft(charge,account.address)
                     auth=OriginAuth("Criar recorrência",VaultAction.SignInvoice,snapshot.selectedWalletId,account.index,OriginAbi.sha(draft.first.digest().hex())){token->
                         val signed=withContext(Dispatchers.IO){WalletVault.signRecurringOffer(context,snapshot.selectedWalletId,account.index,draft.first,token)}
-                        recurringSale=withContext(Dispatchers.IO){recurring.save(signed,draft.second)};delivered=false;go(MerchantStep.Present);startReader()
+                        recurringSale=withContext(Dispatchers.IO){recurring.save(signed,draft.second)};delivered=false;go(MerchantStep.Present)
                     }
                 }
             }catch(c:CancellationException){throw c}catch(e:Exception){error=message(e)}finally{busy=false}
@@ -96,12 +96,18 @@ internal fun OriginMerchantSheet(snapshot:WalletAccountsSnapshot,network:BscChai
     }
     LaunchedEffect(Unit){if((step==MerchantStep.Present || step==MerchantStep.Receipt) && sale==null && recurringSale==null)go(MerchantStep.Network)}
     LaunchedEffect(sale?.invoice?.request?.id){var current=sale ?: return@LaunchedEffect
-        while(current.hash==null && !current.expired){try{current=merchant.poll(current);sale=current;if(current.hash!=null){reader.stop();go(MerchantStep.Receipt)}}catch(c:CancellationException){throw c}catch(_:Exception){};if(current.hash==null && !current.expired)delay(2000)}
+        while(current.hash==null && !current.expired){try{current=merchant.poll(current);sale=current;if(current.expired)reader.stop();if(current.hash!=null){reader.stop();go(MerchantStep.Receipt)}}catch(c:CancellationException){throw c}catch(_:Exception){};if(current.hash==null && !current.expired)delay(2000)}
     }
     LaunchedEffect(recurringSale?.offer?.id){var current=recurringSale ?: return@LaunchedEffect
-        while(current.hash==null && !current.expired){try{current=recurring.poll(current);recurringSale=current;if(current.hash!=null){reader.stop();go(MerchantStep.Receipt)}}catch(c:CancellationException){throw c}catch(_:Exception){};if(current.hash==null && !current.expired)delay(2000)}
+        while(current.hash==null && !current.expired){try{current=recurring.poll(current);recurringSale=current;if(current.expired)reader.stop();if(current.hash!=null){reader.stop();go(MerchantStep.Receipt)}}catch(c:CancellationException){throw c}catch(_:Exception){};if(current.hash==null && !current.expired)delay(2000)}
     }
-    DisposableEffect(lifecycle){val observer=LifecycleEventObserver{_,event->if(event==Lifecycle.Event.ON_PAUSE)reader.stop()};lifecycle.addObserver(observer);onDispose{lifecycle.removeObserver(observer);reader.stop()}}
+    val presentable by rememberUpdatedState(step==MerchantStep.Present && (sale!=null || recurringSale!=null) && sale?.hash==null && recurringSale?.hash==null && sale?.expired!=true && recurringSale?.expired!=true && !delivered)
+    val latestStart by rememberUpdatedState({startReader()})
+    LaunchedEffect(step){if(step==MerchantStep.Present)startReader()else reader.stop()}
+    DisposableEffect(lifecycle){val observer=LifecycleEventObserver{_,event->
+        if(event==Lifecycle.Event.ON_PAUSE)reader.stop()
+        else if(event==Lifecycle.Event.ON_RESUME && presentable)latestStart()
+    };lifecycle.addObserver(observer);onDispose{lifecycle.removeObserver(observer);reader.stop()}}
     Dialog(onDismissRequest={if(!busy)onDismiss()},properties=DialogProperties(usePlatformDefaultWidth=false,decorFitsSystemWindows=false,securePolicy=SecureFlagPolicy.SecureOn,dismissOnBackPress=false)) {
         BackHandler(enabled=!busy){previous()}
         Surface(Modifier.fillMaxSize(),color=C.Background,contentColor=C.Text) {
@@ -172,9 +178,9 @@ internal fun OriginMerchantSheet(snapshot:WalletAccountsSnapshot,network:BscChai
                                 if(kind==MerchantPaymentKind.Recurring)Text("A cada ${charge.intervalDays} dias",color=C.Muted)
                                 Spacer(Modifier.height(24.dp))
                                 if(confirmed){Text("✓",style=MaterialTheme.typography.displayLarge,color=C.Positive);val hash=sale?.hash ?: recurringSale?.hash;hash?.let{BscExplorerButton("Comprovante","/tx/$it",charge.chain)}}
-                                else if(!expired)NfcPulse(if(delivered)"Aguardando pagamento"else"Aproxime o celular")
+                                else if(!expired)MerchantTapAnimation(delivered)
                                 Spacer(Modifier.height(16.dp))
-                                if(!confirmed && !expired)OutlinedButton(onClick=::startReader,modifier=Modifier.fillMaxWidth().heightIn(min=52.dp),shape=MaterialTheme.shapes.medium){Text(if(delivered)"Aproximar novamente"else"Apresentar cobrança")}
+
                             }
                         }
                         error?.let{Text(it,color=C.Error,style=MaterialTheme.typography.bodyMedium,modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})}

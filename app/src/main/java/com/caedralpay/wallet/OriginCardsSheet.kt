@@ -7,6 +7,7 @@ import android.nfc.NfcAdapter
 import android.nfc.cardemulation.CardEmulation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import com.caedralpay.wallet.ui.theme.CaedralColors as C
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -14,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
@@ -78,12 +80,12 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
             engine.send(q,wallet,account.index,token)
         } catch(e:Exception){WalletVault.cancelOriginPayment(capability);permit=null;throw e}
     }
-    fun requestTap(current:OriginCard) {
+    fun requestTap(current:OriginCard,revalidation:Boolean=false) {
         val adapter=NfcAdapter.getDefaultAdapter(activity)
         if(adapter?.isEnabled!=true || !context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_NFC_HOST_CARD_EMULATION)) {
             error="Ative o NFC em um aparelho compatível para continuar.";return
         }
-        auth=OriginAuth("Habilitar aproximação",VaultAction.ArmCard,wallet,account.index,current.fingerprint){token->
+        auth=OriginAuth(if(revalidation)"Revalidar aproximação"else"Habilitar aproximação",VaultAction.ArmCard,wallet,account.index,current.fingerprint){token->
                         withContext(Dispatchers.IO){WalletVault.authorizeOriginTap(context,current,token)}
                         val adapter=NfcAdapter.getDefaultAdapter(activity);require(adapter?.isEnabled==true){"Ative o NFC do celular."}
                         val service=CardEmulation.getInstance(adapter)
@@ -98,7 +100,11 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
         stopTap();loading=true;error=null
         try{if(request.recurring!=null){require(request.card.id==card?.id && request.card.walletId==wallet && request.card.index==account.index);recurringQuote=recurringEngine.prepare(request.recurring,request.card)}else prepareReceived(requireNotNull(request.invoice),request.card)}catch(c:CancellationException){throw c}catch(e:Exception){fail(e)}finally{loading=false}
     }
-    LaunchedEffect(tapping){if(tapping){contentScroll.animateScrollTo(0);delay(120_000);stopTap()}}
+    LaunchedEffect(tapping){if(tapping){
+        contentScroll.animateScrollTo(0);delay(OriginTapSession.READY_WINDOW_MS)
+        val current=card;stopTap()
+        if(current!=null && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))requestTap(current,true)
+    }}
     LaunchedEffect(details){if(details!=null){withFrameNanos{};contentScroll.animateScrollTo(contentScroll.maxValue);delay(30_000);details=null}}
     LaunchedEffect(operation?.hash){
         var record=operation ?: return@LaunchedEffect
@@ -186,7 +192,7 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
                     operation=sendConsented(q);quote=null;paymentDraft=null;error=null
                 }},modifier=Modifier.fillMaxWidth()){Text("Confirmar com segurança")}
                 TextButton(onClick={quote=null;paymentDraft=null;received=null;WalletVault.cancelOriginPayment(permit);permit=null}){Text("Cancelar")}
-            }else if(tapping){TextButton(onClick=::stopTap){Text("Encerrar aproximação")}}
+            }else if(tapping){ /* Revalidation is automatic; dismissal ends the session. */ }
             else {
                 if(operation?.status==TransactionStatus.Confirmed && operation?.quote?.call?.kind==OriginAction.Pay){Text("Pagamento confirmado",style=MaterialTheme.typography.titleLarge)}
                 if(recurringRecord?.status==TransactionStatus.Confirmed)Text("Assinatura autorizada",style=MaterialTheme.typography.titleLarge)
@@ -198,7 +204,13 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
                     }
                 }
             }
-            if(!tapping && operation?.terminal!=false && recurringRecord?.terminal!=false && permit==null)TextButton(onClick={stopTap();subscriptionsOpen=true}){Text("Assinaturas")}
+            if(!tapping && operation?.terminal!=false && recurringRecord?.terminal!=false && permit==null)Surface(color=C.Selected,shape=MaterialTheme.shapes.large,modifier=Modifier.fillMaxWidth().clickable(role=Role.Button){stopTap();subscriptionsOpen=true}) {
+                Row(Modifier.padding(18.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(14.dp)) {
+                    CaedralIcon(CaedralSymbol.History,C.Brand,24.dp)
+                    Column(Modifier.weight(1f)){Text("Assinaturas",fontWeight=FontWeight.SemiBold);Text("Gerenciar débitos automáticos",style=MaterialTheme.typography.bodySmall,color=C.Muted)}
+                    Text("›",color=C.Muted,style=MaterialTheme.typography.headlineSmall)
+                }
+            }
             details?.let{d->OriginCardDetailsPanel(requireNotNull(card),d,onHide={details=null})}
         }
     }

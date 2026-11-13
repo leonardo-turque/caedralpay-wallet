@@ -86,6 +86,14 @@ fun WalletHomeScreen(
     if (enableAccountManagement) NotificationWelcome()
     val account = accounts?.selectedAccount
     val accountKey = "${network.chainId}:" + account?.let { "${accounts?.selectedWalletId}:${it.index}:${it.address}" }
+    val cardAccountKey=account?.let{"${accounts?.selectedWalletId}:${it.index}:${it.address}"}
+    var homeCard by remember(cardAccountKey){mutableStateOf<OriginCard?>(null)}
+    LaunchedEffect(cardAccountKey,sheet) {
+        if(sheet==null && enableAccountManagement && account!=null && accounts!=null) {
+            val selectedWallet=accounts!!.selectedWalletId
+            homeCard=try{kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO){OriginCardStore.latest(context,selectedWallet,account.index)}}catch(c:CancellationException){throw c}catch(_:Exception){null}
+        }
+    }
     LaunchedEffect(accountKey, connectToNetwork) {
         if (!connectToNetwork || account == null) return@LaunchedEffect
         val incoming = IncomingActivityWatcher()
@@ -221,10 +229,12 @@ fun WalletHomeScreen(
         }, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
         WalletQuickActions(onSend = { transferAsset = if (network.isTestnet) WalletAsset.BNB else WalletAsset.USDT; transferFromDetails = false; sheet = HomeSheet.Send },
             onReceive = { transferAsset = if (network.isTestnet) WalletAsset.BNB else WalletAsset.USDT; transferFromDetails = false; sheet = HomeSheet.Receive },
+            onMerchant = { sheet = HomeSheet.Merchant },
             modifier = Modifier.padding(top = 32.dp))
-        if (enableAccountManagement) Row(Modifier.fillMaxWidth().padding(top=16.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick={sheet=HomeSheet.Cards},modifier=Modifier.weight(1f)){Text("Cartões")}
-            OutlinedButton(onClick={sheet=HomeSheet.Merchant},modifier=Modifier.weight(1f)){Text("Maquininha")}
+        if (enableAccountManagement) Box(Modifier.fillMaxWidth().padding(top=24.dp)
+            .clip(RoundedCornerShape(20.dp)).semantics{contentDescription="Abrir cartão"}
+            .clickable(role=Role.Button){sheet=HomeSheet.Cards}) {
+            OriginCardVisual(homeCard?.name ?: "SEU NOME",homeCard?.lastFour.orEmpty())
         }
         HorizontalDivider(Modifier.padding(top = 32.dp, bottom = 24.dp), color = C.Divider)
         WalletAssetSection(displayedAssets,
@@ -299,9 +309,9 @@ fun WalletHomeScreen(
 private enum class HomeSheet { Accounts, Send, Receive, AssetDetails, Network, Appearance, Activity, Nfc, Notifications, Terminal, Cards, Merchant }
 
 @Composable
-private fun WalletQuickActions(onSend: () -> Unit, onReceive: () -> Unit, modifier: Modifier = Modifier) {
-    val actions = listOf(Triple("Comprar", CaedralSymbol.Buy, false), Triple("Trocar", CaedralSymbol.Swap, false),
-        Triple("Enviar", CaedralSymbol.Send, true), Triple("Receber", CaedralSymbol.Receive, true))
+private fun WalletQuickActions(onSend: () -> Unit, onReceive: () -> Unit, onMerchant: () -> Unit, modifier: Modifier = Modifier) {
+    val actions = listOf(Triple("Trocar", CaedralSymbol.Swap, false), Triple("Enviar", CaedralSymbol.Send, true),
+        Triple("Receber", CaedralSymbol.Receive, true), Triple("Maquininha", CaedralSymbol.Terminal, true))
     val largeFont = LocalDensity.current.fontScale > 1.3f
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val columns = if (maxWidth < 300.dp || largeFont) 2 else 4
@@ -312,7 +322,7 @@ private fun WalletQuickActions(onSend: () -> Unit, onReceive: () -> Unit, modifi
                         Column(
                             Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(if (enabled) C.Selected else C.Panel)
                                 .clickable(enabled = enabled, role = Role.Button) {
-                                    if (symbol == CaedralSymbol.Send) onSend() else onReceive()
+                                    when(symbol){CaedralSymbol.Send->onSend();CaedralSymbol.Terminal->onMerchant();else->onReceive()}
                                 }.heightIn(min = 96.dp).padding(horizontal = 4.dp, vertical = 18.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(14.dp)

@@ -11,15 +11,19 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.io.ByteArrayOutputStream
 
 internal object OriginTapSession {
+    const val READY_WINDOW_MS=60_000L
+    @Volatile private var testClock:(()->Long)?=null
+    internal fun configureClockForTest(clock:(()->Long)?){check(BuildConfig.DEBUG);clear();testClock=clock}
+    private fun now()=testClock?.invoke() ?: SystemClock.elapsedRealtime()
     data class Request(val invoice:OriginInvoice?,val card:OriginCard,val recurring:RecurringOffer?=null)
     private var key:CaedralNfcCrypto.Ephemeral?=null
     private var card:OriginCard?=null
     private var deadline=0L
     private val incoming=MutableStateFlow<Request?>(null)
     val request=incoming.asStateFlow()
-    @Synchronized fun arm(value:OriginCard) { clear(); card=value; key=CaedralNfcCrypto.Ephemeral(); deadline=SystemClock.elapsedRealtime()+120_000 }
+    @Synchronized fun arm(value:OriginCard) { clear(); card=value; key=CaedralNfcCrypto.Ephemeral(); deadline=now()+READY_WINDOW_MS }
     @Synchronized fun clear(){key=null;card=null;deadline=0;incoming.value=null}
-    @Synchronized fun hello():ByteArray?=if(SystemClock.elapsedRealtime()<deadline && incoming.value==null)key?.publicKey else null
+    @Synchronized fun hello():ByteArray?=if(now()<deadline && incoming.value==null)key?.publicKey else null
     @Synchronized fun accept(envelope:ByteArray):Boolean {
         if(hello()==null || envelope.size !in setOf(OriginInvoice.SIZE+72,RecurringOffer.SIZE+72))return false
         return try {

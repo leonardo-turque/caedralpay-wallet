@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.caedralpay.wallet.ui.theme.CaedralColors
 
-internal enum class CaedralSymbol { Buy, Swap, Send, Receive, Chevron, Close, Check, Copy, Network, Qr, More, Appearance, History }
+internal enum class CaedralSymbol { Buy, Swap, Send, Receive, Terminal, Chevron, Close, Check, Copy, Network, Qr, More, Appearance, History }
 
 /** Ícones vetoriais próprios CaedralPay, em grade de 24 unidades. */
 @Composable
@@ -23,6 +23,15 @@ internal fun CaedralIcon(symbol: CaedralSymbol, color: Color = CaedralColors.Bra
     Canvas(Modifier.size(size)) {
         val path = Path().apply {
             when (symbol) {
+                CaedralSymbol.Terminal -> {
+                    addRoundRect(androidx.compose.ui.geometry.RoundRect(5f, 2f, 19f, 22f, 2f, 2f))
+                    addRoundRect(androidx.compose.ui.geometry.RoundRect(8f, 5f, 16f, 12f, 1f, 1f))
+                    for (y in listOf(15f, 18f)) {
+                        moveTo(8f, y); lineTo(9f, y)
+                        moveTo(12f, y); lineTo(13f, y)
+                        moveTo(16f, y); lineTo(16.1f, y)
+                    }
+                }
                 CaedralSymbol.History -> {
                     addOval(androidx.compose.ui.geometry.Rect(3f, 3f, 21f, 21f))
                     moveTo(12f, 6f); lineTo(12f, 12f); lineTo(16f, 14f)

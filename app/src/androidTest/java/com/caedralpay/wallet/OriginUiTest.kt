@@ -65,7 +65,7 @@ class OriginUiTest {
                 compose.waitUntil(25_000){compose.onAllNodesWithText("Ver dados").fetchSemanticsNodes().firstOrNull()?.config?.contains(SemanticsProperties.Disabled)==false}
                 compose.onNodeWithText("Ativar pagamentos nesta rede").assertDoesNotExist()
                 compose.onNodeWithText("Aproximar para pagar").assertIsEnabled()
-                compose.onNodeWithText("••••  "+original.lastFour).assertExists()
+                compose.onAllNodesWithText("••••  "+original.lastFour).onLast().assertExists()
                 val reloaded=OriginCardStore.latest(context,snapshot.selectedWalletId,0)!!
                 Assert.assertEquals(original.json().toString(),reloaded.json().toString())
             }
@@ -91,16 +91,35 @@ class OriginUiTest {
             val original=WalletVault.createOriginCard(context,snapshot.selectedWalletId,0,"Ana","Silva")
             context.getSharedPreferences("wallet_alerts",0).edit().putBoolean("welcome_asked",true).apply()
             compose.setContent{WalletTheme{CompositionLocalProvider(LocalContext provides context){WalletHomeScreen("Fixture",enableAccountManagement=true,connectToNetwork=false,initialNetwork=BscChain.Mainnet)}}}
+            compose.waitUntil(15000){compose.waitForIdle();compose.onAllNodesWithText("••••  "+original.lastFour).fetchSemanticsNodes().isNotEmpty()}
+            compose.onNodeWithText("Cartões").assertDoesNotExist();compose.onNodeWithText("Comprar").assertDoesNotExist()
+            File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir,"home-active-card.png").outputStream().use{compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG,100,it)}
             repeat(2){
-                compose.onNodeWithText("Cartões").performScrollTo().performClick()
+                compose.onNodeWithContentDescription("Abrir cartão").performScrollTo().performClick()
                 compose.waitUntil(25_000){compose.waitForIdle();compose.onAllNodesWithText("Ver dados").fetchSemanticsNodes().isNotEmpty()}
-                compose.onNodeWithText("••••  "+original.lastFour).assertExists()
+                compose.onAllNodesWithText("••••  "+original.lastFour).onLast().assertExists()
                 compose.onNodeWithText("Aproximar para pagar").assertIsEnabled()
                 Assert.assertEquals(original.json().toString(),OriginCardStore.latest(context,snapshot.selectedWalletId,0)!!.json().toString())
                 compose.onNodeWithContentDescription("Fechar painel").performClick()
                 compose.waitUntil(25_000){compose.onAllNodesWithText("Seu cartão Origin").fetchSemanticsNodes().isEmpty()}
                 compose.waitForIdle()
             }
+            compose.onNodeWithContentDescription("Abrir cartão").performScrollTo().performClick()
+            compose.waitUntil(15000){compose.waitForIdle();compose.onAllNodesWithText("Regenerar").fetchSemanticsNodes().isNotEmpty()}
+            compose.onNodeWithText("Regenerar").performScrollTo().performClick()
+            compose.onNodeWithText("Nome no cartão").performTextInput("Ana")
+            compose.onNodeWithText("Sobrenome").performTextInput("Costa")
+            compose.onNodeWithText("Gerar novo cartão").performScrollTo().performClick()
+            compose.onNodeWithText("PIN de 6 dígitos").performTextInput("123456")
+            compose.onNodeWithText("Confirmar").performClick()
+            compose.waitUntil(15000){compose.waitForIdle();OriginCardStore.latest(context,snapshot.selectedWalletId,0)?.id!=original.id}
+            val regenerated=OriginCardStore.latest(context,snapshot.selectedWalletId,0)!!
+            compose.onNodeWithContentDescription("Fechar painel").performClick()
+            compose.waitUntil(15000){compose.waitForIdle();compose.onAllNodesWithText("••••  "+regenerated.lastFour).fetchSemanticsNodes().isNotEmpty() && compose.onAllNodesWithText("Seu cartão Origin").fetchSemanticsNodes().isEmpty()}
+            compose.onNodeWithText("ANA COSTA").assertExists()
+            compose.onNodeWithText("Maquininha").performScrollTo().performClick()
+            compose.onNodeWithText("Escolha a rede").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Fechar maquininha").performClick()
         } finally {WalletVault.lock();folder.deleteRecursively()}
     }
     @Test fun originVisualHasBrandAndMasksNumber() {

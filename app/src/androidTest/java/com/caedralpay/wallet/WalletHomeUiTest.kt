@@ -117,7 +117,7 @@ class WalletHomeUiTest {
                 androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(current.density, 2f)
             ) { WalletTheme { WalletHomeScreen("Carteira com um nome muito longo") } }
         }
-        listOf("Comprar", "Trocar", "Enviar", "Receber").forEach {
+        listOf("Trocar", "Enviar", "Receber", "Maquininha").forEach {
             compose.onNodeWithText(it).performScrollTo().assertIsDisplayed()
         }
     }
@@ -174,9 +174,10 @@ class WalletHomeUiTest {
     }
 
     @Test
-    fun buyAndSwapRemainVisibleButDisabled() {
+    fun merchantReplacesBuyAndOnlySwapRemainsDisabled() {
         compose.setContent { WalletTheme { WalletHomeScreen("Principal") } }
-        compose.onNodeWithText("Comprar").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithText("Comprar").assertDoesNotExist()
+        compose.onNodeWithText("Maquininha").assertIsDisplayed().assertIsEnabled()
         compose.onNodeWithText("Trocar").assertIsDisplayed().assertIsNotEnabled()
         compose.onNodeWithText("Enviar").assertIsEnabled()
         compose.onNodeWithText("Receber").assertIsEnabled()
