@@ -111,7 +111,7 @@ internal fun OriginCardsSheet(snapshot:WalletAccountsSnapshot,network:BscChain,o
                         val next=engine.prepare(OriginCall.forCard(if(record.quote.call.kind==OriginAction.ResetApproval)OriginAction.Approve else OriginAction.Pay,requireNotNull(card),invoice),account.address)
                         operation=sendConsented(next)
                     } else prepareReceived(invoice,requireNotNull(card))
-                }catch(c:CancellationException){throw c}catch(e:Exception){fail(e)}
+                }catch(c:CancellationException){throw c}catch(e:Exception){WalletVault.cancelOriginPayment(permit);permit=null;fail(e)}
             } else {WalletVault.cancelOriginPayment(permit);permit=null}
         }else {WalletVault.cancelOriginPayment(permit);permit=null;error="A operação não foi concluída pela rede. Confira a atividade antes de tentar novamente."}
     }
